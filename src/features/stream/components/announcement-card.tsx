@@ -1,10 +1,11 @@
-import { MessageSquare, Paperclip } from "lucide-react";
+import { Paperclip } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getInitials } from "@/lib/utils";
 
 import type { AnnouncementSummary } from "../types";
+import { CommentThread } from "./comment-thread";
 
 function formatRelativeTime(date: Date): string {
   const diffMs = Date.now() - date.getTime();
@@ -28,7 +29,17 @@ function formatRelativeTime(date: Date): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function AnnouncementCard({ announcement }: { announcement: AnnouncementSummary }) {
+interface AnnouncementCardProps {
+  announcement: AnnouncementSummary;
+  classroomId: string;
+  currentUser: { id: string; name: string; image: string | null };
+}
+
+export function AnnouncementCard({
+  announcement,
+  classroomId,
+  currentUser,
+}: AnnouncementCardProps) {
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 pb-3">
@@ -65,14 +76,12 @@ export function AnnouncementCard({ announcement }: { announcement: AnnouncementS
           </div>
         ) : null}
 
-        <div className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
-          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-          <span>
-            {announcement.commentCount === 0
-              ? "No comments"
-              : `${announcement.commentCount} comment${announcement.commentCount === 1 ? "" : "s"}`}
-          </span>
-        </div>
+        <CommentThread
+          classroomId={classroomId}
+          announcementId={announcement.id}
+          comments={announcement.comments}
+          currentUser={currentUser}
+        />
       </CardContent>
     </Card>
   );

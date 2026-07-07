@@ -2,7 +2,17 @@ import type { AnnouncementSummary } from "../types";
 import { AnnouncementCard } from "./announcement-card";
 import { StreamEmptyState } from "./stream-empty-state";
 
-export function AnnouncementList({ announcements }: { announcements: AnnouncementSummary[] }) {
+interface AnnouncementListProps {
+  announcements: AnnouncementSummary[];
+  classroomId: string;
+  currentUser: { id: string; name: string; image: string | null };
+}
+
+export function AnnouncementList({
+  announcements,
+  classroomId,
+  currentUser,
+}: AnnouncementListProps) {
   if (announcements.length === 0) {
     return <StreamEmptyState />;
   }
@@ -10,7 +20,12 @@ export function AnnouncementList({ announcements }: { announcements: Announcemen
   return (
     <div className="flex flex-col gap-4">
       {announcements.map((announcement) => (
-        <AnnouncementCard key={announcement.id} announcement={announcement} />
+        <AnnouncementCard
+          key={announcement.id}
+          announcement={announcement}
+          classroomId={classroomId}
+          currentUser={currentUser}
+        />
       ))}
     </div>
   );

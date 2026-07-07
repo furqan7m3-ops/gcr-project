@@ -8,6 +8,6 @@ import type { AnnouncementSummary } from "../types";
 export async function listAnnouncementsForClassroom(
   classroomId: string,
 ): Promise<AnnouncementSummary[]> {
-  await requireUser();
-  return streamService.listClassroomAnnouncements(classroomId);
+  const user = await requireUser();
+  return streamService.listClassroomAnnouncements(classroomId, user);
 }

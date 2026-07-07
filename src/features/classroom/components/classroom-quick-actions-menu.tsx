@@ -13,11 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { usePendingAction } from "@/hooks/use-pending-action";
 import { cn } from "@/lib/utils";
 
 import { archiveClassroomAction, leaveClassroomAction } from "../actions/classroom-mutations";
 import { useCopyToClipboard } from "../hooks/use-copy-to-clipboard";
-import { usePendingAction } from "../hooks/use-pending-action";
 import type { ClassroomSummary } from "../types";
 import { ClassroomFormDialog } from "./classroom-form-dialog";
 import { ConfirmDialog } from "./confirm-dialog";

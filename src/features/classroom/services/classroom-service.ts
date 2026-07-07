@@ -60,10 +60,37 @@ function isUniqueCodeConflict(error: unknown): boolean {
  * Only OWNER/TEACHER/CO_TEACHER on this specific classroom (or a platform ADMIN) may
  * manage it - a global TEACHER role does not imply access to every classroom.
  */
+export async function hasManagementAccess(
+  classroomId: string,
+  user: SessionUser,
+): Promise<boolean> {
+  if (user.role === UserRole.ADMIN) {
+    return true;
+  }
+
+  const membership = await prisma.classroomMembership.findUnique({
+    where: { classroomId_userId: { classroomId, userId: user.id } },
+  });
+
+  return (
+    membership?.status === ClassroomMembershipStatus.ACTIVE && canManageClassroom(membership.role)
+  );
+}
+
 export async function assertManagementAccess(
   classroomId: string,
   user: SessionUser,
 ): Promise<void> {
+  if (!(await hasManagementAccess(classroomId, user))) {
+    throw new ClassroomServiceError(
+      "FORBIDDEN",
+      "You do not have permission to manage this classroom.",
+    );
+  }
+}
+
+/** Any active membership (any role) - or a platform ADMIN - counts. */
+export async function assertMembership(classroomId: string, user: SessionUser): Promise<void> {
   if (user.role === UserRole.ADMIN) {
     return;
   }
@@ -72,14 +99,8 @@ export async function assertManagementAccess(
     where: { classroomId_userId: { classroomId, userId: user.id } },
   });
 
-  const canManage =
-    membership?.status === ClassroomMembershipStatus.ACTIVE && canManageClassroom(membership.role);
-
-  if (!canManage) {
-    throw new ClassroomServiceError(
-      "FORBIDDEN",
-      "You do not have permission to manage this classroom.",
-    );
+  if (!membership || membership.status !== ClassroomMembershipStatus.ACTIVE) {
+    throw new ClassroomServiceError("FORBIDDEN", "You are not a member of this classroom.");
   }
 }
 

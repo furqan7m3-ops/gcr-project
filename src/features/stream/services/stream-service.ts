@@ -1,33 +1,67 @@
 import type { SessionUser } from "@/auth/session";
-import { assertManagementAccess } from "@/features/classroom/services/classroom-service";
+import {
+  assertManagementAccess,
+  assertMembership,
+  hasManagementAccess,
+} from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { AnnouncementStatus, ClassroomStatus, FileAttachmentType } from "@/generated/prisma/enums";
+import {
+  AnnouncementStatus,
+  ClassroomStatus,
+  CommentVisibility,
+  FileAttachmentType,
+} from "@/generated/prisma/enums";
 
-import type { AnnouncementAttachmentSummary, AnnouncementSummary } from "../types";
+import type { AnnouncementAttachmentSummary, AnnouncementSummary, CommentSummary } from "../types";
 
 // An announcement is considered "edited" if it was updated meaningfully after
 // creation - a small threshold avoids flagging clock-precision no-ops as edits.
 const EDITED_THRESHOLD_MS = 60_000;
 const MAX_TITLE_LENGTH = 120;
 
-function announcementWithAuthorInclude() {
+function announcementWithRelationsInclude() {
   return {
     author: { select: { name: true, image: true, avatarUrl: true } },
-    _count: { select: { comments: true } },
+    comments: {
+      where: { deletedAt: null },
+      include: { author: { select: { id: true, name: true, image: true, avatarUrl: true } } },
+      orderBy: { createdAt: "asc" },
+    },
   } as const;
 }
 
 async function createAnnouncementRecord(data: Prisma.AnnouncementCreateArgs["data"]) {
-  return prisma.announcement.create({ data, include: announcementWithAuthorInclude() });
+  return prisma.announcement.create({ data, include: announcementWithRelationsInclude() });
 }
 
-type AnnouncementWithAuthor = Awaited<ReturnType<typeof createAnnouncementRecord>>;
+type AnnouncementWithRelations = Awaited<ReturnType<typeof createAnnouncementRecord>>;
+type CommentWithAuthor = AnnouncementWithRelations["comments"][number];
+
+function toCommentSummary(
+  comment: CommentWithAuthor,
+  viewerId: string,
+  canModerate: boolean,
+): CommentSummary {
+  return {
+    id: comment.id,
+    content: comment.content,
+    createdAt: comment.createdAt,
+    author: {
+      id: comment.author.id,
+      name: comment.author.name,
+      image: comment.author.image ?? comment.author.avatarUrl ?? null,
+    },
+    canDelete: canModerate || comment.authorId === viewerId,
+  };
+}
 
 function toAnnouncementSummary(
-  announcement: AnnouncementWithAuthor,
+  announcement: AnnouncementWithRelations,
   attachments: AnnouncementAttachmentSummary[],
+  viewerId: string,
+  canModerate: boolean,
 ): AnnouncementSummary {
   return {
     id: announcement.id,
@@ -40,7 +74,9 @@ function toAnnouncementSummary(
       name: announcement.author.name,
       image: announcement.author.image ?? announcement.author.avatarUrl ?? null,
     },
-    commentCount: announcement._count.comments,
+    comments: announcement.comments.map((comment) =>
+      toCommentSummary(comment, viewerId, canModerate),
+    ),
     attachments,
   };
 }
@@ -59,16 +95,20 @@ function deriveTitleFromContent(content: string): string {
 
 export async function listClassroomAnnouncements(
   classroomId: string,
+  viewer: SessionUser,
 ): Promise<AnnouncementSummary[]> {
-  const announcements = await prisma.announcement.findMany({
-    where: {
-      classroomId,
-      status: AnnouncementStatus.PUBLISHED,
-      deletedAt: null,
-    },
-    include: announcementWithAuthorInclude(),
-    orderBy: { createdAt: "desc" },
-  });
+  const [announcements, canModerate] = await Promise.all([
+    prisma.announcement.findMany({
+      where: {
+        classroomId,
+        status: AnnouncementStatus.PUBLISHED,
+        deletedAt: null,
+      },
+      include: announcementWithRelationsInclude(),
+      orderBy: { createdAt: "desc" },
+    }),
+    hasManagementAccess(classroomId, viewer),
+  ]);
 
   if (announcements.length === 0) {
     return [];
@@ -79,7 +119,12 @@ export async function listClassroomAnnouncements(
   );
 
   return announcements.map((announcement) =>
-    toAnnouncementSummary(announcement, attachmentsByAnnouncementId.get(announcement.id) ?? []),
+    toAnnouncementSummary(
+      announcement,
+      attachmentsByAnnouncementId.get(announcement.id) ?? [],
+      viewer.id,
+      canModerate,
+    ),
   );
 }
 
@@ -113,7 +158,80 @@ export async function createAnnouncement(
     status: AnnouncementStatus.PUBLISHED,
   });
 
-  return toAnnouncementSummary(created, []);
+  return toAnnouncementSummary(created, [], user.id, true);
+}
+
+export async function createComment(
+  announcementId: string,
+  user: SessionUser,
+  content: string,
+): Promise<CommentSummary> {
+  const announcement = await prisma.announcement.findUnique({
+    where: { id: announcementId },
+    include: { classroom: { include: { settings: true } } },
+  });
+
+  if (
+    !announcement ||
+    announcement.deletedAt ||
+    announcement.status !== AnnouncementStatus.PUBLISHED
+  ) {
+    throw new ClassroomServiceError("NOT_FOUND", "Announcement not found.");
+  }
+
+  if (announcement.classroom.status !== ClassroomStatus.ACTIVE) {
+    throw new ClassroomServiceError(
+      "ARCHIVED",
+      "This class is archived and can't accept new comments.",
+    );
+  }
+
+  // Any active member (any role) may comment - unlike posting an announcement,
+  // this doesn't require management rights.
+  await assertMembership(announcement.classroomId, user);
+
+  if (announcement.classroom.settings && !announcement.classroom.settings.allowComments) {
+    throw new ClassroomServiceError("FORBIDDEN", "Comments are turned off for this class.");
+  }
+
+  const created = await prisma.comment.create({
+    data: {
+      announcementId,
+      authorId: user.id,
+      content,
+      visibility: CommentVisibility.PUBLIC,
+    },
+    include: { author: { select: { id: true, name: true, image: true, avatarUrl: true } } },
+  });
+
+  const canModerate = await hasManagementAccess(announcement.classroomId, user);
+  return toCommentSummary(created, user.id, canModerate);
+}
+
+export async function deleteComment(commentId: string, user: SessionUser): Promise<void> {
+  const comment = await prisma.comment.findUnique({
+    where: { id: commentId },
+    include: { announcement: { select: { classroomId: true } } },
+  });
+
+  if (!comment || comment.deletedAt || !comment.announcement) {
+    throw new ClassroomServiceError("NOT_FOUND", "Comment not found.");
+  }
+
+  const isOwnComment = comment.authorId === user.id;
+  const canModerate = await hasManagementAccess(comment.announcement.classroomId, user);
+
+  if (!isOwnComment && !canModerate) {
+    throw new ClassroomServiceError(
+      "FORBIDDEN",
+      "You do not have permission to delete this comment.",
+    );
+  }
+
+  await prisma.comment.update({
+    where: { id: commentId },
+    data: { deletedAt: new Date() },
+  });
 }
 
 // FileAttachment is polymorphic (attachmentType + entityId), so it isn't a typed

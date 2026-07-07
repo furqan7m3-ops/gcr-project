@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-import type { ActionResult } from "../types";
+import type { ActionResult } from "@/types/action-result";
 
 /**
  * Wraps a fire-and-forget Server Action call (not bound to a <form>) with
