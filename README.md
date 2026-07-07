@@ -70,6 +70,10 @@ The project is structured for a monolithic Next.js application with server actio
 
 PostgreSQL runs inside Docker so developers do not need to install or configure a local database. The application itself runs on the host machine.
 
+## Database Architecture
+
+The application uses a Prisma-backed PostgreSQL schema that models classrooms, memberships, announcements, materials, assignments, submissions, comments, notifications, files, and activity history. For a full explanation of entities, relationships, enums, cascade rules, indexes, constraints, and an ER diagram, see [docs/database-architecture.md](docs/database-architecture.md).
+
 ### Useful Commands
 
 - Start database:
