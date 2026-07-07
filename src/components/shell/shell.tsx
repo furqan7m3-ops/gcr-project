@@ -23,12 +23,20 @@ export function Shell({ user, children }: ShellProps) {
   return (
     <TooltipProvider delayDuration={200}>
       <SidebarProvider>
+        <a
+          href="#main-content"
+          className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-50 focus-visible:rounded-md focus-visible:bg-primary focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          Skip to main content
+        </a>
         <div className="flex min-h-screen flex-col bg-background">
           <Header user={user} />
           <div className="flex flex-1">
             <Sidebar sections={sections} />
             <MobileNav sections={sections} />
-            <main className="flex-1 overflow-x-hidden">{children}</main>
+            <main id="main-content" tabIndex={-1} className="flex-1 overflow-x-hidden outline-none">
+              {children}
+            </main>
           </div>
         </div>
       </SidebarProvider>

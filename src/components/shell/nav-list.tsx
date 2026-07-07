@@ -18,7 +18,7 @@ export function NavList({ sections, collapsed = false, onNavigate }: NavListProp
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col gap-4">
+    <nav aria-label="Primary" className="flex flex-col gap-4">
       {sections.map((section, sectionIndex) => (
         <div key={section.label ?? sectionIndex} className="flex flex-col gap-0.5">
           {section.label && !collapsed ? (
@@ -37,7 +37,7 @@ export function NavList({ sections, collapsed = false, onNavigate }: NavListProp
                 onClick={onNavigate}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-full px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-full px-3 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   collapsed && "justify-center px-2.5",
                   isActive
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"

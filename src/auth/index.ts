@@ -1,4 +1,4 @@
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { type DefaultSession, type NextAuthOptions } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
@@ -19,9 +19,11 @@ declare module "next-auth" {
 
 export const runtime = "nodejs";
 
-export const authConfig = {
+export const authConfig: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
-  session: { strategy: "database" as const },
+  // The Credentials provider only supports JWT sessions in next-auth v4 - database
+  // strategy sessions require an OAuth-style adapter-backed sign-in.
+  session: { strategy: "jwt" as const },
   secret: process.env.AUTH_SECRET,
   providers: [
     Credentials({
@@ -68,11 +70,10 @@ export const authConfig = {
 
       return token;
     },
-    async session({ session, user }) {
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id as string;
-        (session.user as typeof session.user & { role?: string }).role =
-          (user as { role?: string }).role ?? "STUDENT";
+        session.user.id = token.id as string;
+        session.user.role = (token.role as string) ?? "STUDENT";
       }
 
       return session;

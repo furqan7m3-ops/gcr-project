@@ -2,32 +2,34 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. This repository currently contains the production-ready foundation for the application, including the project structure, development tooling, Dockerized PostgreSQL, and Prisma configuration. No application features or business logic have been implemented yet.
+GCR is a Google Classroom-inspired classroom management platform. The repository now contains a working foundation plus the first vertical slice of product functionality: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication, the shared authenticated application shell (responsive header/sidebar/navigation), and a complete Classroom module (create/join/leave/archive classes, role-based authorization, classroom detail shell with Stream/Classwork/People tabs). Stream, Classwork, People, Assignments, and Notifications are still placeholder screens pending future phases.
 
 ## Architecture
 
-The project is structured for a monolithic Next.js application with server actions and route handlers, using Prisma for data access and PostgreSQL for persistence. The codebase is organized to support future modules such as authentication, dashboard, classes, announcements, materials, assignments, submissions, notifications, and admin.
+The project is a monolithic Next.js application using the App Router, Server Actions, and Route Handlers, with Prisma for data access and PostgreSQL for persistence. Business logic is organized feature-first under `src/features/*` (services → validation → Server Actions → components), while `src/components/*` holds shared, domain-agnostic UI infrastructure (design-system primitives, app shell, page scaffolding, empty/loading/error states). See [docs/ui-architecture.md](docs/ui-architecture.md) for the full UI architecture and [docs/database-architecture.md](docs/database-architecture.md) for the data model.
 
 ## Technology Stack
 
-- Next.js 15 with App Router
+- Next.js 16 (App Router, Turbopack, Server Actions)
 - React 19
-- TypeScript
-- Tailwind CSS
-- shadcn/ui-ready UI foundation
-- Prisma ORM
+- TypeScript (strict)
+- Tailwind CSS v4
+- shadcn/ui-style components on Radix UI primitives
+- Auth.js (next-auth v4, credentials provider, JWT sessions) + Prisma adapter
+- Prisma ORM (driver adapter for `pg`)
 - PostgreSQL
-- TanStack Query
-- React Hook Form + Zod
-- Lucide React + Sonner
+- Zod (Server Action input validation)
+- React Hook Form (available; not yet wired into a form)
+- TanStack Query (available; not yet wired into a data flow)
+- Lucide React + Sonner (toasts)
 - ESLint + Prettier + Husky + lint-staged
 - Docker + Docker Compose
 
 ## Why These Technologies Were Chosen
 
-- Next.js provides a strong full-stack foundation with server-side rendering and server actions.
+- Next.js provides a strong full-stack foundation with server-side rendering and Server Actions, so mutations (create/join/archive a class) don't need a separate API layer.
 - TypeScript improves maintainability and team collaboration.
-- Tailwind CSS enables fast UI iteration with a scalable design system.
+- Tailwind CSS enables fast UI iteration with a scalable, token-driven design system.
 - Prisma simplifies database access while keeping the schema explicit and type-safe.
 - PostgreSQL is a robust relational database for classroom and assignment data.
 - Docker ensures every developer can run the same local infrastructure without installing PostgreSQL manually.
@@ -57,14 +59,30 @@ The project is structured for a monolithic Next.js application with server actio
    ```bash
    npx prisma generate
    ```
-6. Run migrations when schema changes are introduced:
+6. Apply migrations:
    ```bash
    npx prisma migrate dev
    ```
-7. Start the development server:
+7. Seed the database with demo users and a demo classroom:
+   ```bash
+   npm run seed
+   ```
+8. Start the development server:
    ```bash
    npm run dev
    ```
+
+## Trying It Out Locally
+
+The seed script creates four users (password hashes in `prisma/seed.ts` are placeholders, not real login credentials as committed). To sign in locally, set a real bcrypt hash for a seed user's `passwordHash` column, or hash a known password yourself:
+
+```bash
+node -e "console.log(require('bcryptjs').hashSync('Testpass123!', 10))"
+```
+
+Then update the user's `passwordHash` in the database with that hash and sign in at `/login` with that email/password. Seed accounts: `mina.admin@gcr.dev` (ADMIN), `daniel.teacher@gcr.dev` (TEACHER, owns "Advanced Mathematics 101"), `sofia.student@gcr.dev` / `liam.student@gcr.dev` (STUDENT, enrolled in that class).
+
+Once signed in: `/dashboard` → sidebar **Classes** → view/create/join/archive classes → click into a class to see the Stream/Classwork/People tab shell (placeholder content for now).
 
 ## Docker Setup
 
@@ -95,29 +113,27 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 
 ## Folder Structure
 
-- src/app: Next.js App Router pages, layouts, and route segments.
-- src/components: reusable UI and layout components.
-- src/features: domain-oriented feature modules.
-- src/hooks: shared hooks.
-- src/lib: shared libraries and utilities.
-- src/providers: context providers and global state wrappers.
-- src/services: API and persistence service abstractions.
-- src/server: server-only code, actions, and handlers.
-- src/types: shared TypeScript types.
-- src/utils: helper functions.
-- src/constants: application constants.
-- src/config: environment and app configuration.
-- src/styles: global styles.
-- docs: project documentation.
-- prisma: Prisma schema and migrations.
-- public: static assets.
+- `src/app`: Next.js App Router routes. `(auth)/login` is public; `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`).
+- `src/components/ui`: shadcn-style design-system primitives (button, card, dialog, alert-dialog, dropdown-menu, sheet, tooltip, input, textarea, label, skeleton, badge, avatar, separator) - no domain logic.
+- `src/components/shell`: the application chrome - header, sidebar, mobile drawer, nav config, breadcrumbs, user/notifications menus.
+- `src/components/page`: page-composition scaffolding - page container, section header, dashboard/stat grids.
+- `src/components/states`: shared empty/error/loading-skeleton components.
+- `src/components/layouts`: the pre-auth marketing shell used by the public landing page.
+- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `components/`, `hooks/`, `types/`. Currently: `classroom`.
+- `src/auth`: Auth.js configuration (`index.ts`) and the server-side session helper (`session.ts`).
+- `src/lib`: shared utilities, including `lib/auth/permissions.ts` (role/ownership authorization helpers) and `lib/prisma.ts` (Prisma client singleton).
+- `src/generated/prisma`: generated Prisma client - do not edit.
+- `src/config`: environment variable parsing/validation.
+- `docs`: project documentation (UI architecture, database architecture).
+- `prisma`: Prisma schema, migrations, and seed script.
+- `public`: static assets.
 
 ## Coding Standards
 
 - Use strict TypeScript.
 - Keep components small and composable.
-- Prefer feature-based organization for new domain work.
-- Avoid placeholder business logic in the initial setup.
+- Prefer feature-based organization for new domain work: `services` do data access, `actions` do auth + validation + call services, `components` stay presentational.
+- Avoid placeholder business logic - Server Actions should enforce real authorization and touch the real database, even for early-phase features.
 - Run linting and formatting before opening a pull request.
 
 ## Git Workflow
@@ -133,25 +149,30 @@ Recommended branches:
 ## Environment Variables
 
 - DATABASE_URL: PostgreSQL connection string for Prisma.
-- AUTH_SECRET: Secret used for future authentication flows.
+- AUTH_SECRET: Secret used to sign Auth.js JWTs.
 - NEXTAUTH_URL: Application base URL for authentication callbacks.
 - NEXT_PUBLIC_SUPABASE_URL: Placeholder for future Supabase Storage.
 - NEXT_PUBLIC_SUPABASE_ANON_KEY: Placeholder for future Supabase Storage.
 - SUPABASE_SERVICE_ROLE_KEY: Placeholder for future Supabase Storage.
 
+## Implemented So Far
+
+- Authentication: Auth.js credentials provider, JWT sessions, Prisma adapter, `/login` form, protected-route middleware.
+- Application shell: responsive header, collapsible desktop sidebar, mobile drawer navigation, breadcrumbs, user/notifications menus, page-composition primitives, empty/loading/error states.
+- Classroom module: create/edit/archive a classroom (Teacher/Admin), join/leave by class code (any authenticated user), classroom list ("My Classrooms" cards), classroom detail shell with Stream/Classwork/People tab navigation.
+
 ## Future Modules
 
 Planned modules include:
 
-- Authentication
-- Dashboard
-- Classes
-- Announcements
-- Materials
-- Assignments
-- Submissions
-- Notifications
-- Admin
+- Stream (announcements, comments)
+- Classwork (topics, assignments, materials)
+- People (roster, invitations)
+- Assignment detail and submissions/grading
+- Notifications (real data, currently UI-only)
+- Search (real data, currently UI-only)
+- Admin area (users, classrooms, reports)
+- Calendar
 
 ## Deployment
 
