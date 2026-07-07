@@ -1,14 +1,10 @@
-import { ClassroomMembershipRole } from "@/generated/prisma/enums";
-
+import { canManageClassroom } from "../lib/can-manage";
 import type { ClassroomSummary } from "../types";
 import { ClassroomCover } from "./classroom-cover";
 import { ClassroomQuickActionsMenu } from "./classroom-quick-actions-menu";
 
 export function ClassroomHeader({ classroom }: { classroom: ClassroomSummary }) {
-  const canManage =
-    classroom.role === ClassroomMembershipRole.OWNER ||
-    classroom.role === ClassroomMembershipRole.TEACHER ||
-    classroom.role === ClassroomMembershipRole.CO_TEACHER;
+  const canManage = canManageClassroom(classroom.role);
 
   return (
     <div className="relative">

@@ -1,3 +1,5 @@
+export type { ActionResult } from "@/types/action-result";
+
 export interface AnnouncementAttachmentSummary {
   id: string;
   fileName: string;

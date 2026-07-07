@@ -1,5 +1,7 @@
 import type { ClassroomMembershipRole, ClassroomStatus } from "@/generated/prisma/enums";
 
+export type { ActionResult } from "@/types/action-result";
+
 export interface ClassroomSummary {
   id: string;
   title: string;
@@ -16,7 +18,3 @@ export interface ClassroomSummary {
   role: ClassroomMembershipRole;
   createdAt: Date;
 }
-
-export type ActionResult<T = undefined> =
-  | { status: "success"; data: T }
-  | { status: "error"; message: string; fieldErrors?: Partial<Record<string, string[]>> };

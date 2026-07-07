@@ -8,6 +8,7 @@ import {
   UserRole,
 } from "@/generated/prisma/enums";
 
+import { canManageClassroom } from "../lib/can-manage";
 import { generateClassroomCode } from "../lib/generate-code";
 import { ClassroomServiceError } from "../lib/errors";
 import type { CreateClassroomInput, UpdateClassroomInput } from "../validation/classroom-schema";
@@ -59,7 +60,10 @@ function isUniqueCodeConflict(error: unknown): boolean {
  * Only OWNER/TEACHER/CO_TEACHER on this specific classroom (or a platform ADMIN) may
  * manage it - a global TEACHER role does not imply access to every classroom.
  */
-async function assertManagementAccess(classroomId: string, user: SessionUser): Promise<void> {
+export async function assertManagementAccess(
+  classroomId: string,
+  user: SessionUser,
+): Promise<void> {
   if (user.role === UserRole.ADMIN) {
     return;
   }
@@ -69,10 +73,7 @@ async function assertManagementAccess(classroomId: string, user: SessionUser): P
   });
 
   const canManage =
-    membership?.status === ClassroomMembershipStatus.ACTIVE &&
-    (membership.role === ClassroomMembershipRole.OWNER ||
-      membership.role === ClassroomMembershipRole.TEACHER ||
-      membership.role === ClassroomMembershipRole.CO_TEACHER);
+    membership?.status === ClassroomMembershipStatus.ACTIVE && canManageClassroom(membership.role);
 
   if (!canManage) {
     throw new ClassroomServiceError(
