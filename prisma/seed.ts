@@ -1,5 +1,6 @@
+import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import {
-  PrismaClient,
   UserRole,
   ClassroomMembershipRole,
   ClassroomMembershipStatus,
@@ -12,11 +13,12 @@ import {
   SubmissionStatus,
   CommentVisibility,
   NotificationType,
-  FileAttachmentType,
   ActivityAction,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+});
 
 async function main() {
   await prisma.activityLog.deleteMany();
@@ -35,7 +37,7 @@ async function main() {
   await prisma.classroom.deleteMany();
   await prisma.user.deleteMany();
 
-  const admin = await prisma.user.create({
+  await prisma.user.create({
     data: {
       name: "Mina Alvarez",
       email: "mina.admin@gcr.dev",
@@ -166,7 +168,7 @@ async function main() {
     },
   });
 
-  const announcementTwo = await prisma.announcement.create({
+  await prisma.announcement.create({
     data: {
       classroomId: classroom.id,
       authorId: teacher.id,
@@ -178,7 +180,7 @@ async function main() {
     },
   });
 
-  const materialOne = await prisma.material.create({
+  await prisma.material.create({
     data: {
       classroomId: classroom.id,
       topicId: topicOne.id,
@@ -189,7 +191,7 @@ async function main() {
     },
   });
 
-  const materialTwo = await prisma.material.create({
+  await prisma.material.create({
     data: {
       classroomId: classroom.id,
       topicId: topicTwo.id,
