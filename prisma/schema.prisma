@@ -1,0 +1,11 @@
+// Prisma schema placeholder for GCR.
+// Add models in future feature work.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
