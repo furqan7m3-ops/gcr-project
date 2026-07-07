@@ -24,10 +24,13 @@ export interface AnnouncementSummary {
   content: string;
   createdAt: Date;
   isEdited: boolean;
+  isPinned: boolean;
   author: {
     name: string;
     image: string | null;
   };
   comments: CommentSummary[];
   attachments: AnnouncementAttachmentSummary[];
+  /** Whether the current viewer may edit/delete/pin this announcement. */
+  canManage: boolean;
 }

@@ -1,10 +1,11 @@
-import { Paperclip } from "lucide-react";
+import { Paperclip, Pin } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getInitials } from "@/lib/utils";
 
 import type { AnnouncementSummary } from "../types";
+import { AnnouncementManagementMenu } from "./announcement-management-menu";
 import { CommentThread } from "./comment-thread";
 
 function formatRelativeTime(date: Date): string {
@@ -49,7 +50,7 @@ export function AnnouncementCard({
           ) : null}
           <AvatarFallback>{getInitials(announcement.author.name)}</AvatarFallback>
         </Avatar>
-        <div className="flex min-w-0 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           <p className="truncate text-sm font-semibold text-foreground">
             {announcement.author.name}
           </p>
@@ -58,6 +59,18 @@ export function AnnouncementCard({
             {announcement.isEdited ? " · edited" : ""}
           </p>
         </div>
+        {announcement.isPinned ? (
+          <span
+            className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary"
+            title="Pinned announcement"
+          >
+            <Pin className="h-3.5 w-3.5" aria-hidden />
+            Pinned
+          </span>
+        ) : null}
+        {announcement.canManage ? (
+          <AnnouncementManagementMenu classroomId={classroomId} announcement={announcement} />
+        ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3 pt-0">
         <p className="whitespace-pre-wrap text-sm text-foreground">{announcement.content}</p>

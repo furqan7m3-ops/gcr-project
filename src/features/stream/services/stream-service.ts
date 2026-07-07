@@ -70,6 +70,7 @@ function toAnnouncementSummary(
     createdAt: announcement.createdAt,
     isEdited:
       announcement.updatedAt.getTime() - announcement.createdAt.getTime() > EDITED_THRESHOLD_MS,
+    isPinned: announcement.isPinned,
     author: {
       name: announcement.author.name,
       image: announcement.author.image ?? announcement.author.avatarUrl ?? null,
@@ -78,7 +79,22 @@ function toAnnouncementSummary(
       toCommentSummary(comment, viewerId, canModerate),
     ),
     attachments,
+    canManage: canModerate,
   };
+}
+
+async function findActiveAnnouncementOrThrow(announcementId: string) {
+  const announcement = await prisma.announcement.findUnique({ where: { id: announcementId } });
+
+  if (
+    !announcement ||
+    announcement.deletedAt ||
+    announcement.status !== AnnouncementStatus.PUBLISHED
+  ) {
+    throw new ClassroomServiceError("NOT_FOUND", "Announcement not found.");
+  }
+
+  return announcement;
 }
 
 // Announcement.title is required by the schema but the composer only collects a
@@ -105,7 +121,7 @@ export async function listClassroomAnnouncements(
         deletedAt: null,
       },
       include: announcementWithRelationsInclude(),
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     }),
     hasManagementAccess(classroomId, viewer),
   ]);
@@ -159,6 +175,65 @@ export async function createAnnouncement(
   });
 
   return toAnnouncementSummary(created, [], user.id, true);
+}
+
+export async function updateAnnouncement(
+  announcementId: string,
+  user: SessionUser,
+  content: string,
+): Promise<AnnouncementSummary> {
+  const existing = await findActiveAnnouncementOrThrow(announcementId);
+  await assertManagementAccess(existing.classroomId, user);
+
+  const updated = await prisma.announcement.update({
+    where: { id: announcementId },
+    data: {
+      content,
+      title: deriveTitleFromContent(content),
+    },
+    include: announcementWithRelationsInclude(),
+  });
+
+  const attachmentsByAnnouncementId = await getAttachmentsByAnnouncementId([announcementId]);
+  return toAnnouncementSummary(
+    updated,
+    attachmentsByAnnouncementId.get(announcementId) ?? [],
+    user.id,
+    true,
+  );
+}
+
+export async function deleteAnnouncement(announcementId: string, user: SessionUser): Promise<void> {
+  const existing = await findActiveAnnouncementOrThrow(announcementId);
+  await assertManagementAccess(existing.classroomId, user);
+
+  await prisma.announcement.update({
+    where: { id: announcementId },
+    data: { deletedAt: new Date() },
+  });
+}
+
+export async function setAnnouncementPinned(
+  announcementId: string,
+  user: SessionUser,
+  pinned: boolean,
+): Promise<AnnouncementSummary> {
+  const existing = await findActiveAnnouncementOrThrow(announcementId);
+  await assertManagementAccess(existing.classroomId, user);
+
+  const updated = await prisma.announcement.update({
+    where: { id: announcementId },
+    data: { isPinned: pinned },
+    include: announcementWithRelationsInclude(),
+  });
+
+  const attachmentsByAnnouncementId = await getAttachmentsByAnnouncementId([announcementId]);
+  return toAnnouncementSummary(
+    updated,
+    attachmentsByAnnouncementId.get(announcementId) ?? [],
+    user.id,
+    true,
+  );
 }
 
 export async function createComment(

@@ -6,6 +6,7 @@ import { Copy, LogOut, MoreVertical, Pencil, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +21,6 @@ import { archiveClassroomAction, leaveClassroomAction } from "../actions/classro
 import { useCopyToClipboard } from "../hooks/use-copy-to-clipboard";
 import type { ClassroomSummary } from "../types";
 import { ClassroomFormDialog } from "./classroom-form-dialog";
-import { ConfirmDialog } from "./confirm-dialog";
 
 interface ClassroomQuickActionsMenuProps {
   classroom: ClassroomSummary;
