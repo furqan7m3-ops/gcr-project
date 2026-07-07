@@ -1,13 +1,9 @@
-import { Megaphone } from "lucide-react";
+import { AnnouncementList } from "@/features/stream/components/announcement-list";
+import { listAnnouncementsForClassroom } from "@/features/stream/queries/stream-queries";
 
-import { EmptyState } from "@/components/states/empty-state";
+export default async function StreamPage({ params }: { params: Promise<{ classroomId: string }> }) {
+  const { classroomId } = await params;
+  const announcements = await listAnnouncementsForClassroom(classroomId);
 
-export default function StreamPage() {
-  return (
-    <EmptyState
-      icon={Megaphone}
-      title="Stream is coming soon"
-      description="Announcements and class updates will appear here in a future update."
-    />
-  );
+  return <AnnouncementList announcements={announcements} />;
 }
