@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. The repository now contains a working foundation plus the first vertical slice of product functionality: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication, the shared authenticated application shell (responsive header/sidebar/navigation), and a complete Classroom module (create/join/leave/archive classes, role-based authorization, classroom detail shell with Stream/Classwork/People tabs). Stream, Classwork, People, Assignments, and Notifications are still placeholder screens pending future phases.
+GCR is a Google Classroom-inspired classroom management platform. The repository now contains a working foundation plus several vertical slices of product functionality: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication, the shared authenticated application shell (responsive header/sidebar/navigation), a complete Classroom module (create/join/leave/archive classes, role-based authorization, classroom detail shell with Stream/Classwork/People tabs), and a complete Stream module (announcements with edit/delete/pin, and comments with optimistic UI). Classwork, People, Assignments, and Notifications are still placeholder screens pending future phases.
 
 ## Architecture
 
@@ -74,15 +74,74 @@ The project is a monolithic Next.js application using the App Router, Server Act
 
 ## Trying It Out Locally
 
-The seed script creates four users (password hashes in `prisma/seed.ts` are placeholders, not real login credentials as committed). To sign in locally, set a real bcrypt hash for a seed user's `passwordHash` column, or hash a known password yourself:
+### Get a working login
 
-```bash
-node -e "console.log(require('bcryptjs').hashSync('Testpass123!', 10))"
-```
+The seed script (`prisma/seed.ts`) creates four users, but their committed `passwordHash` values are placeholders - not real credentials. Before anyone can sign in, set a real bcrypt hash on at least one seed user.
 
-Then update the user's `passwordHash` in the database with that hash and sign in at `/login` with that email/password. Seed accounts: `mina.admin@gcr.dev` (ADMIN), `daniel.teacher@gcr.dev` (TEACHER, owns "Advanced Mathematics 101"), `sofia.student@gcr.dev` / `liam.student@gcr.dev` (STUDENT, enrolled in that class).
+1. Generate a hash for a password of your choice:
+   ```bash
+   node -e "console.log(require('bcryptjs').hashSync('Testpass123!', 10))"
+   ```
+2. Update the seed user's row with that hash (psql example, adjust for your DB client of choice):
+   ```sql
+   UPDATE "User" SET "passwordHash" = '<hash from step 1>' WHERE email = 'daniel.teacher@gcr.dev';
+   UPDATE "User" SET "passwordHash" = '<hash from step 1>' WHERE email = 'sofia.student@gcr.dev';
+   ```
+3. Sign in at `/login` with that email and the plaintext password you hashed. The login page also shows a "Dev seed accounts" hint box outside of production builds.
 
-Once signed in: `/dashboard` → sidebar **Classes** → view/create/join/archive classes → click into a class to see the Stream/Classwork/People tab shell (placeholder content for now).
+Seed accounts: `mina.admin@gcr.dev` (ADMIN), `daniel.teacher@gcr.dev` (TEACHER, owns "Advanced Mathematics 101"), `sofia.student@gcr.dev` / `liam.student@gcr.dev` (STUDENT, both enrolled in that class). Only teacher/student have a `passwordHash` worth patching for typical testing - patch admin's too if you need to test `/admin/*` nav visibility.
+
+### User flow walkthrough
+
+A step-by-step path through everything currently implemented. Useful for anyone reviewing the app for the first time.
+
+**1. Authentication**
+
+- Visit `/login`, sign in as the teacher (`daniel.teacher@gcr.dev`).
+- Try a wrong password first if you want to see the inline error state.
+- On success you land on `/dashboard`.
+- Open an incognito window and try visiting `/dashboard` directly while signed out - you should be redirected to `/login` (middleware-enforced).
+
+**2. Application shell**
+
+- Click the hamburger icon (top-left) on desktop - the sidebar collapses to icon-only with hover tooltips; click again to expand.
+- Shrink the browser window below ~1024px - the sidebar disappears and the same hamburger now opens a slide-in drawer.
+- Click the bell icon - an empty "You're all caught up" notifications dropdown (UI only, not wired to real data yet).
+- Click your avatar (top-right) - dropdown with your name/email/role and a working Sign out.
+
+**3. Classroom list (`/classes`, via the sidebar)**
+
+- As the teacher: you see the "Advanced Mathematics 101" card and both **Create class** and **Join class** buttons.
+- Click the **⋮** menu on the card: Copy class code / Edit class / Archive class.
+- Create a test class via the dialog - it redirects you straight into the new class.
+- Sign out and sign in as the student (`sofia.student@gcr.dev`): same class card is visible (she's enrolled), but there's no **Create class** button - only **Join class** and, on the **⋮** menu, **Leave class** instead of Edit/Archive.
+- Try joining with a made-up code to see the validation/not-found error.
+
+**4. Classroom detail**
+
+- Click into a class card. You land on a colored banner header with the class title/section and three tabs: **Stream / Classwork / People**.
+- Classwork and People currently show a "coming soon" placeholder - that's expected, not a bug.
+
+**5. Stream - announcements**
+
+- As the teacher, you'll see a composer at the top ("Share something with your class..."). Post one.
+- As the student, there is no composer at all - confirm the textarea/Post button simply aren't in the page for a student account.
+- On each announcement (teacher view), open the **⋮** menu: **Edit**, **Pin**/**Unpin**, **Delete**.
+  - Pin one - it should jump to the top of the list regardless of when it was posted, and a "Pinned" badge appears (visible to every role, not just the teacher).
+  - Edit one - content updates and an "· edited" marker appears next to the timestamp.
+  - Delete one - a confirmation dialog appears first (destructive action); after confirming, it disappears and a toast confirms it.
+- As the student, confirm the **⋮** menu doesn't appear on any announcement at all.
+
+**6. Stream - comments**
+
+- Under any announcement, both teacher and student can type in the "Add class comment…" box and post - it appears in the thread immediately (optimistic UI, before the server even responds).
+- As a student, post a comment, then confirm you see a delete (trash) icon on _your own_ comment but not on other people's.
+- As the teacher, confirm you see a delete icon on _every_ comment in the classroom, including students' - deleting one shows a toast and removes it instantly.
+- Comments display oldest-first, growing downward like a conversation thread.
+
+**7. Responsive check**
+
+- Repeat steps 3-6 with the browser narrowed to a phone-sized viewport (or DevTools device mode) - the drawer nav, dialogs, and comment threads should all remain usable.
 
 ## Docker Setup
 
@@ -119,7 +178,7 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 - `src/components/page`: page-composition scaffolding - page container, section header, dashboard/stat grids.
 - `src/components/states`: shared empty/error/loading-skeleton components.
 - `src/components/layouts`: the pre-auth marketing shell used by the public landing page.
-- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `components/`, `hooks/`, `types/`. Currently: `classroom`.
+- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `components/`, `hooks/`, `types/`. Currently: `classroom`, `stream` (`stream` uses `queries/` instead of a read-side action, since its reads are plain server-only functions, not client-invokable Server Actions).
 - `src/auth`: Auth.js configuration (`index.ts`) and the server-side session helper (`session.ts`).
 - `src/lib`: shared utilities, including `lib/auth/permissions.ts` (role/ownership authorization helpers) and `lib/prisma.ts` (Prisma client singleton).
 - `src/generated/prisma`: generated Prisma client - do not edit.
@@ -160,12 +219,12 @@ Recommended branches:
 - Authentication: Auth.js credentials provider, JWT sessions, Prisma adapter, `/login` form, protected-route middleware.
 - Application shell: responsive header, collapsible desktop sidebar, mobile drawer navigation, breadcrumbs, user/notifications menus, page-composition primitives, empty/loading/error states.
 - Classroom module: create/edit/archive a classroom (Teacher/Admin), join/leave by class code (any authenticated user), classroom list ("My Classrooms" cards), classroom detail shell with Stream/Classwork/People tab navigation.
+- Stream module: announcements (create/edit/delete/pin/unpin, Teacher/Admin only, students read-only), pinned-first ordering, comments on announcements (create by any member, delete own, teacher/manager can delete any) with optimistic UI, confirmation dialogs on destructive actions, toast notifications throughout. All of it authorized server-side, not just hidden in the UI.
 
 ## Future Modules
 
 Planned modules include:
 
-- Stream (announcements, comments)
 - Classwork (topics, assignments, materials)
 - People (roster, invitations)
 - Assignment detail and submissions/grading
