@@ -17,17 +17,25 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus } from "lucide-react";
+import { ClipboardList, FileText, Layers, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import {
   deleteTopicAction,
   renameTopicAction,
   reorderTopicsAction,
 } from "../actions/topic-mutations";
-import type { MaterialSummary, TopicSummary } from "../types";
+import type { AssignmentSummary, MaterialSummary, TopicSummary } from "../types";
+import { AssignmentFormDialog } from "./assignment-form-dialog";
+import { AssignmentList } from "./assignment-list";
 import { CreateTopicDialog } from "./create-topic-dialog";
 import { MaterialFormDialog } from "./material-form-dialog";
 import { MaterialList } from "./material-list";
@@ -61,15 +69,23 @@ interface TopicListProps {
   classroomId: string;
   topics: TopicSummary[];
   materials: MaterialSummary[];
+  assignments: AssignmentSummary[];
   canManage: boolean;
 }
 
-export function TopicList({ classroomId, topics, materials, canManage }: TopicListProps) {
+export function TopicList({
+  classroomId,
+  topics,
+  materials,
+  assignments,
+  canManage,
+}: TopicListProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [createTopicOpen, setCreateTopicOpen] = useState(false);
   const [createMaterialOpen, setCreateMaterialOpen] = useState(false);
+  const [createAssignmentOpen, setCreateAssignmentOpen] = useState(false);
   const [optimisticTopics, applyOptimistic] = useOptimistic(topics, topicsReducer);
 
   const sensors = useSensors(
@@ -147,10 +163,13 @@ export function TopicList({ classroomId, topics, materials, canManage }: TopicLi
   }
 
   const ungroupedMaterials = materials.filter((material) => !material.topicId);
-  const isEmpty = optimisticTopics.length === 0 && materials.length === 0;
+  const ungroupedAssignments = assignments.filter((assignment) => !assignment.topicId);
+  const isEmpty =
+    optimisticTopics.length === 0 && materials.length === 0 && assignments.length === 0;
 
   function renderTopic(topic: TopicSummary, sortable: boolean) {
     const topicMaterials = materials.filter((material) => material.topicId === topic.id);
+    const topicAssignments = assignments.filter((assignment) => assignment.topicId === topic.id);
 
     return (
       <div key={topic.id} className="flex flex-col gap-2">
@@ -164,7 +183,12 @@ export function TopicList({ classroomId, topics, materials, canManage }: TopicLi
           onSaveEdit={(title) => handleRename(topic.id, title)}
           onDelete={() => handleDelete(topic.id)}
         />
-        <div className="pl-6">
+        <div className="flex flex-col gap-2 pl-6">
+          <AssignmentList
+            assignments={topicAssignments}
+            classroomId={classroomId}
+            topics={optimisticTopics}
+          />
           <MaterialList
             materials={topicMaterials}
             classroomId={classroomId}
@@ -178,13 +202,26 @@ export function TopicList({ classroomId, topics, materials, canManage }: TopicLi
   return (
     <div className="flex flex-col gap-4">
       {canManage ? (
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCreateTopicOpen(true)}>
-            <Plus /> Create topic
-          </Button>
-          <Button size="sm" onClick={() => setCreateMaterialOpen(true)}>
-            <Plus /> Add material
-          </Button>
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm">
+                <Plus /> Create
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setCreateAssignmentOpen(true)}>
+                <ClipboardList /> Assignment
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setCreateMaterialOpen(true)}>
+                <FileText /> Material
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setCreateTopicOpen(true)}>
+                <Layers /> Topic
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <CreateTopicDialog
             classroomId={classroomId}
             open={createTopicOpen}
@@ -197,6 +234,13 @@ export function TopicList({ classroomId, topics, materials, canManage }: TopicLi
             topics={optimisticTopics}
             open={createMaterialOpen}
             onOpenChange={setCreateMaterialOpen}
+          />
+          <AssignmentFormDialog
+            mode="create"
+            classroomId={classroomId}
+            topics={optimisticTopics}
+            open={createAssignmentOpen}
+            onOpenChange={setCreateAssignmentOpen}
           />
         </div>
       ) : null}
@@ -228,13 +272,18 @@ export function TopicList({ classroomId, topics, materials, canManage }: TopicLi
             )
           ) : null}
 
-          {ungroupedMaterials.length > 0 ? (
+          {ungroupedMaterials.length > 0 || ungroupedAssignments.length > 0 ? (
             <div className="flex flex-col gap-2">
               {optimisticTopics.length > 0 ? (
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   General
                 </p>
               ) : null}
+              <AssignmentList
+                assignments={ungroupedAssignments}
+                classroomId={classroomId}
+                topics={optimisticTopics}
+              />
               <MaterialList
                 materials={ungroupedMaterials}
                 classroomId={classroomId}

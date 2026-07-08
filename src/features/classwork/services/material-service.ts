@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { ClassroomStatus, FileAttachmentType, MaterialType } from "@/generated/prisma/enums";
 
+import { assertTopicBelongsToClassroom } from "./topic-service";
 import type { MaterialAttachedFile, MaterialSummary } from "../types";
 
 const VIDEO_URL_PATTERN = /(youtube\.com|youtu\.be|vimeo\.com)/i;
@@ -85,14 +86,6 @@ async function findActiveMaterialOrThrow(materialId: string) {
   }
 
   return material;
-}
-
-async function assertTopicBelongsToClassroom(topicId: string, classroomId: string): Promise<void> {
-  const topic = await prisma.topic.findUnique({ where: { id: topicId } });
-
-  if (!topic || topic.deletedAt || topic.classroomId !== classroomId) {
-    throw new ClassroomServiceError("NOT_FOUND", "Topic not found in this classroom.");
-  }
 }
 
 export async function listClassroomMaterials(

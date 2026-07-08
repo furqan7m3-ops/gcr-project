@@ -1,15 +1,6 @@
 import { z } from "zod";
 
-function optionalTrimmed(max: number, label: string) {
-  return z
-    .string()
-    .max(max, `${label} must be at most ${max} characters.`)
-    .optional()
-    .transform((value) => {
-      const trimmed = value?.trim();
-      return trimmed ? trimmed : undefined;
-    });
-}
+import { optionalTrimmed, topicIdField } from "./shared";
 
 const urlField = z
   .string()
@@ -21,17 +12,6 @@ const urlField = z
   })
   .refine((value) => !value || /^https?:\/\/.+/i.test(value), {
     message: "URL must start with http:// or https://.",
-  });
-
-const topicIdField = z
-  .string()
-  .optional()
-  .transform((value) => {
-    const trimmed = value?.trim();
-    return trimmed ? trimmed : undefined;
-  })
-  .refine((value) => !value || z.string().uuid().safeParse(value).success, {
-    message: "Invalid topic.",
   });
 
 export const createMaterialSchema = z.object({

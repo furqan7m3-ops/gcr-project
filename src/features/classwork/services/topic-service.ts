@@ -31,6 +31,19 @@ async function findActiveTopicOrThrow(topicId: string) {
   return topic;
 }
 
+// Shared with material-service/assignment-service - both let a teacher assign
+// content to a topic, and must reject a topic id from a different classroom.
+export async function assertTopicBelongsToClassroom(
+  topicId: string,
+  classroomId: string,
+): Promise<void> {
+  const topic = await prisma.topic.findUnique({ where: { id: topicId } });
+
+  if (!topic || topic.deletedAt || topic.classroomId !== classroomId) {
+    throw new ClassroomServiceError("NOT_FOUND", "Topic not found in this classroom.");
+  }
+}
+
 export async function listClassroomTopics(
   classroomId: string,
   viewer: SessionUser,

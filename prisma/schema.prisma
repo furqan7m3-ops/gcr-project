@@ -331,6 +331,7 @@ model Assignment {
   description         String?          @db.Text
   status              AssignmentStatus @default(DRAFT)
   dueDate             DateTime?
+  points              Int?
   allowLateSubmission Boolean          @default(true)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt

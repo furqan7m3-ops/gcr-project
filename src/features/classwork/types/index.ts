@@ -1,8 +1,8 @@
-import type { MaterialType } from "@/generated/prisma/enums";
+import type { AssignmentStatus, MaterialType } from "@/generated/prisma/enums";
 import type { AttachedFileSummary } from "@/lib/file-attachments";
 
 export type { ActionResult } from "@/types/action-result";
-export type { MaterialType } from "@/generated/prisma/enums";
+export type { MaterialType, AssignmentStatus } from "@/generated/prisma/enums";
 export type MaterialAttachedFile = AttachedFileSummary;
 
 export interface TopicSummary {
@@ -24,5 +24,20 @@ export interface MaterialSummary {
   createdAt: Date;
   attachments: MaterialAttachedFile[];
   /** Whether the current viewer may edit/delete this material. */
+  canManage: boolean;
+}
+
+export interface AssignmentSummary {
+  id: string;
+  title: string;
+  description: string | null;
+  status: AssignmentStatus;
+  dueDate: Date | null;
+  points: number | null;
+  topicId: string | null;
+  authorName: string;
+  createdAt: Date;
+  attachments: AttachedFileSummary[];
+  /** Whether the current viewer may edit/publish/close/delete this assignment. */
   canManage: boolean;
 }
