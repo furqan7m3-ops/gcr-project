@@ -5,7 +5,8 @@ export type ClassroomErrorCode =
   | "NOT_A_MEMBER"
   | "OWNER_CANNOT_LEAVE"
   | "FORBIDDEN"
-  | "CODE_GENERATION_FAILED";
+  | "CODE_GENERATION_FAILED"
+  | "VALIDATION_ERROR";
 
 export class ClassroomServiceError extends Error {
   constructor(

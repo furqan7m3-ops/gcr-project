@@ -1,13 +1,21 @@
-import { ClipboardList } from "lucide-react";
+import { getClassroomByIdAction } from "@/features/classroom/actions/classroom-queries";
+import { canManageClassroom } from "@/features/classroom/lib/can-manage";
+import { TopicList } from "@/features/classwork/components/topic-list";
+import { listTopicsForClassroom } from "@/features/classwork/queries/topic-queries";
 
-import { EmptyState } from "@/components/states/empty-state";
+export default async function ClassworkPage({
+  params,
+}: {
+  params: Promise<{ classroomId: string }>;
+}) {
+  const { classroomId } = await params;
 
-export default function ClassworkPage() {
-  return (
-    <EmptyState
-      icon={ClipboardList}
-      title="Classwork is coming soon"
-      description="Topics, assignments, and materials will appear here in a future update."
-    />
-  );
+  const [topics, classroom] = await Promise.all([
+    listTopicsForClassroom(classroomId),
+    getClassroomByIdAction(classroomId),
+  ]);
+
+  const canManage = classroom ? canManageClassroom(classroom.role) : false;
+
+  return <TopicList classroomId={classroomId} topics={topics} canManage={canManage} />;
 }
