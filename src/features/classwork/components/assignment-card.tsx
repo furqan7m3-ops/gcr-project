@@ -1,18 +1,13 @@
-import { Award, CalendarClock, ClipboardList, Paperclip } from "lucide-react";
+import Link from "next/link";
+import { Award, CalendarClock, ClipboardList } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
+import { formatDueDate } from "../lib/format-assignment";
 import type { AssignmentSummary, TopicSummary } from "../types";
+import { AssignmentAttachments } from "./assignment-attachments";
 import { AssignmentManagementMenu } from "./assignment-management-menu";
-
-function formatDueDate(date: Date | null): string | null {
-  if (!date) {
-    return null;
-  }
-
-  return `Due ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
-}
 
 interface AssignmentCardProps {
   assignment: AssignmentSummary;
@@ -32,7 +27,12 @@ export function AssignmentCard({ assignment, classroomId, topics }: AssignmentCa
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-medium text-foreground">{assignment.title}</p>
+            <Link
+              href={`/classes/${classroomId}/classwork/${assignment.id}`}
+              className="truncate text-sm font-medium text-foreground hover:underline"
+            >
+              {assignment.title}
+            </Link>
             {assignment.status !== "PUBLISHED" ? (
               <Badge variant={assignment.status === "CLOSED" ? "secondary" : "outline"}>
                 {assignment.status === "CLOSED" ? "Closed" : "Draft"}
@@ -59,20 +59,10 @@ export function AssignmentCard({ assignment, classroomId, topics }: AssignmentCa
             ) : null}
           </div>
 
-          {assignment.attachments.length > 0 ? (
-            <div className="mt-1 flex flex-col gap-1">
-              {assignment.attachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                  title="File contents aren't stored yet - this is metadata only."
-                >
-                  <Paperclip className="h-3 w-3 shrink-0" aria-hidden />
-                  <span className="truncate">{attachment.fileName}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          <AssignmentAttachments
+            attachments={assignment.attachments}
+            className="mt-1 flex flex-col gap-1"
+          />
 
           <p className="text-xs text-muted-foreground">{assignment.authorName}</p>
         </div>
