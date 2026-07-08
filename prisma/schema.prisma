@@ -306,6 +306,7 @@ model Material {
   authorId      String      @db.Uuid
   title         String
   description   String?     @db.Text
+  url           String?
   type          MaterialType @default(DOCUMENT)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt

@@ -27,8 +27,10 @@ import {
   renameTopicAction,
   reorderTopicsAction,
 } from "../actions/topic-mutations";
-import type { TopicSummary } from "../types";
+import type { MaterialSummary, TopicSummary } from "../types";
 import { CreateTopicDialog } from "./create-topic-dialog";
+import { MaterialFormDialog } from "./material-form-dialog";
+import { MaterialList } from "./material-list";
 import { TopicEmptyState } from "./topic-empty-state";
 import { TopicRow } from "./topic-row";
 
@@ -58,14 +60,16 @@ function topicsReducer(state: TopicSummary[], action: TopicAction): TopicSummary
 interface TopicListProps {
   classroomId: string;
   topics: TopicSummary[];
+  materials: MaterialSummary[];
   canManage: boolean;
 }
 
-export function TopicList({ classroomId, topics, canManage }: TopicListProps) {
+export function TopicList({ classroomId, topics, materials, canManage }: TopicListProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createTopicOpen, setCreateTopicOpen] = useState(false);
+  const [createMaterialOpen, setCreateMaterialOpen] = useState(false);
   const [optimisticTopics, applyOptimistic] = useOptimistic(topics, topicsReducer);
 
   const sensors = useSensors(
@@ -99,7 +103,7 @@ export function TopicList({ classroomId, topics, canManage }: TopicListProps) {
     });
   }
 
-  function handleCreated() {
+  function handleTopicCreated() {
     // The dialog already awaited the create action, so `topics` on the server is
     // already correct - just refresh. (Splicing it in optimistically here too raced
     // with this refresh and briefly rendered the same topic twice.)
@@ -142,53 +146,103 @@ export function TopicList({ classroomId, topics, canManage }: TopicListProps) {
     });
   }
 
+  const ungroupedMaterials = materials.filter((material) => !material.topicId);
+  const isEmpty = optimisticTopics.length === 0 && materials.length === 0;
+
+  function renderTopic(topic: TopicSummary, sortable: boolean) {
+    const topicMaterials = materials.filter((material) => material.topicId === topic.id);
+
+    return (
+      <div key={topic.id} className="flex flex-col gap-2">
+        <TopicRow
+          topic={topic}
+          canManage={canManage}
+          sortable={sortable}
+          isEditing={editingTopicId === topic.id}
+          onStartEdit={() => setEditingTopicId(topic.id)}
+          onCancelEdit={() => setEditingTopicId(null)}
+          onSaveEdit={(title) => handleRename(topic.id, title)}
+          onDelete={() => handleDelete(topic.id)}
+        />
+        <div className="pl-6">
+          <MaterialList
+            materials={topicMaterials}
+            classroomId={classroomId}
+            topics={optimisticTopics}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {canManage ? (
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => setCreateTopicOpen(true)}>
             <Plus /> Create topic
+          </Button>
+          <Button size="sm" onClick={() => setCreateMaterialOpen(true)}>
+            <Plus /> Add material
           </Button>
           <CreateTopicDialog
             classroomId={classroomId}
-            open={createOpen}
-            onOpenChange={setCreateOpen}
-            onCreated={handleCreated}
+            open={createTopicOpen}
+            onOpenChange={setCreateTopicOpen}
+            onCreated={handleTopicCreated}
+          />
+          <MaterialFormDialog
+            mode="create"
+            classroomId={classroomId}
+            topics={optimisticTopics}
+            open={createMaterialOpen}
+            onOpenChange={setCreateMaterialOpen}
           />
         </div>
       ) : null}
 
-      {optimisticTopics.length === 0 ? (
+      {isEmpty ? (
         <TopicEmptyState canManage={canManage} />
-      ) : canManage ? (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext
-            items={optimisticTopics.map((topic) => topic.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <ul className="flex flex-col gap-2">
-              {optimisticTopics.map((topic) => (
-                <TopicRow
-                  key={topic.id}
-                  topic={topic}
-                  canManage
-                  sortable
-                  isEditing={editingTopicId === topic.id}
-                  onStartEdit={() => setEditingTopicId(topic.id)}
-                  onCancelEdit={() => setEditingTopicId(null)}
-                  onSaveEdit={(title) => handleRename(topic.id, title)}
-                  onDelete={() => handleDelete(topic.id)}
-                />
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {optimisticTopics.map((topic) => (
-            <TopicRow key={topic.id} topic={topic} canManage={false} />
-          ))}
-        </ul>
+        <>
+          {optimisticTopics.length > 0 ? (
+            canManage ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={optimisticTopics.map((topic) => topic.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="flex flex-col gap-4">
+                    {optimisticTopics.map((topic) => renderTopic(topic, true))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {optimisticTopics.map((topic) => renderTopic(topic, false))}
+              </div>
+            )
+          ) : null}
+
+          {ungroupedMaterials.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {optimisticTopics.length > 0 ? (
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  General
+                </p>
+              ) : null}
+              <MaterialList
+                materials={ungroupedMaterials}
+                classroomId={classroomId}
+                topics={optimisticTopics}
+              />
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   );

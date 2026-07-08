@@ -5,6 +5,7 @@ import {
   hasManagementAccess,
 } from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
+import { getFileAttachmentsByEntityIds } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import {
@@ -130,8 +131,9 @@ export async function listClassroomAnnouncements(
     return [];
   }
 
-  const attachmentsByAnnouncementId = await getAttachmentsByAnnouncementId(
+  const attachmentsByAnnouncementId = await getFileAttachmentsByEntityIds(
     announcements.map((announcement) => announcement.id),
+    FileAttachmentType.ANNOUNCEMENT,
   );
 
   return announcements.map((announcement) =>
@@ -194,7 +196,10 @@ export async function updateAnnouncement(
     include: announcementWithRelationsInclude(),
   });
 
-  const attachmentsByAnnouncementId = await getAttachmentsByAnnouncementId([announcementId]);
+  const attachmentsByAnnouncementId = await getFileAttachmentsByEntityIds(
+    [announcementId],
+    FileAttachmentType.ANNOUNCEMENT,
+  );
   return toAnnouncementSummary(
     updated,
     attachmentsByAnnouncementId.get(announcementId) ?? [],
@@ -227,7 +232,10 @@ export async function setAnnouncementPinned(
     include: announcementWithRelationsInclude(),
   });
 
-  const attachmentsByAnnouncementId = await getAttachmentsByAnnouncementId([announcementId]);
+  const attachmentsByAnnouncementId = await getFileAttachmentsByEntityIds(
+    [announcementId],
+    FileAttachmentType.ANNOUNCEMENT,
+  );
   return toAnnouncementSummary(
     updated,
     attachmentsByAnnouncementId.get(announcementId) ?? [],
@@ -307,28 +315,4 @@ export async function deleteComment(commentId: string, user: SessionUser): Promi
     where: { id: commentId },
     data: { deletedAt: new Date() },
   });
-}
-
-// FileAttachment is polymorphic (attachmentType + entityId), so it isn't a typed
-// Prisma relation on Announcement - fetched separately and grouped in memory.
-async function getAttachmentsByAnnouncementId(
-  announcementIds: string[],
-): Promise<Map<string, AnnouncementAttachmentSummary[]>> {
-  const attachments = await prisma.fileAttachment.findMany({
-    where: {
-      attachmentType: FileAttachmentType.ANNOUNCEMENT,
-      entityId: { in: announcementIds },
-    },
-    include: { file: { select: { fileName: true } } },
-  });
-
-  const byAnnouncementId = new Map<string, AnnouncementAttachmentSummary[]>();
-
-  for (const attachment of attachments) {
-    const existing = byAnnouncementId.get(attachment.entityId) ?? [];
-    existing.push({ id: attachment.id, fileName: attachment.file.fileName });
-    byAnnouncementId.set(attachment.entityId, existing);
-  }
-
-  return byAnnouncementId;
 }

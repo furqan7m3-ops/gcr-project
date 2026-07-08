@@ -58,7 +58,7 @@ export function TopicRow({
   }
 
   return (
-    <li
+    <div
       ref={sortable ? setNodeRef : undefined}
       style={style}
       className={cn(
@@ -142,6 +142,6 @@ export function TopicRow({
           onDelete?.();
         }}
       />
-    </li>
+    </div>
   );
 }

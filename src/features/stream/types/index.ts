@@ -1,9 +1,8 @@
+import type { AttachedFileSummary } from "@/lib/file-attachments";
+
 export type { ActionResult } from "@/types/action-result";
 
-export interface AnnouncementAttachmentSummary {
-  id: string;
-  fileName: string;
-}
+export type AnnouncementAttachmentSummary = AttachedFileSummary;
 
 export interface CommentSummary {
   id: string;
