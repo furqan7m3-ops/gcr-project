@@ -3,7 +3,6 @@ import { requireUser } from "@/lib/auth/permissions";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 
 import * as assignmentService from "../services/assignment-service";
-import type { AssignmentDetail } from "../services/assignment-service";
 import type { AssignmentSummary } from "../types";
 
 // Classroom membership is already enforced by the classroom detail layout that
@@ -19,7 +18,7 @@ export async function listAssignmentsForClassroom(
 export async function getAssignmentDetail(
   classroomId: string,
   assignmentId: string,
-): Promise<AssignmentDetail | null> {
+): Promise<AssignmentSummary | null> {
   const user = await requireUser();
 
   try {

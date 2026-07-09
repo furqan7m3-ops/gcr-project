@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { Award, CalendarClock } from "lucide-react";
 
@@ -6,12 +7,17 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { AssignmentAttachments } from "@/features/classwork/components/assignment-attachments";
 import { AssignmentManagementMenu } from "@/features/classwork/components/assignment-management-menu";
-import { SubmissionStatusPanel } from "@/features/classwork/components/submission-status-panel";
 import { formatDueDate } from "@/features/classwork/lib/format-assignment";
 import { getAssignmentDetail } from "@/features/classwork/queries/assignment-queries";
 import { listTopicsForClassroom } from "@/features/classwork/queries/topic-queries";
+import { SubmissionOverviewCard } from "@/features/submissions/components/submission-overview-card";
 import { SubmissionPanel } from "@/features/submissions/components/submission-panel";
-import { getStudentSubmission } from "@/features/submissions/queries/submission-queries";
+import {
+  getAssignmentSubmissions,
+  getOwnSubmissionComments,
+  getStudentSubmission,
+} from "@/features/submissions/queries/submission-queries";
+import { requireUser } from "@/lib/auth/permissions";
 
 export default async function AssignmentDetailPage({
   params,
@@ -20,9 +26,10 @@ export default async function AssignmentDetailPage({
 }) {
   const { classroomId, assignmentId } = await params;
 
-  const [assignment, topics] = await Promise.all([
+  const [assignment, topics, user] = await Promise.all([
     getAssignmentDetail(classroomId, assignmentId),
     listTopicsForClassroom(classroomId),
+    requireUser(),
   ]);
 
   if (!assignment) {
@@ -31,19 +38,33 @@ export default async function AssignmentDetailPage({
 
   const dueDateLabel = formatDueDate(assignment.dueDate);
 
-  const submissionPanel = assignment.canManage ? (
-    <SubmissionStatusPanel
-      canManage={assignment.canManage}
-      studentCount={assignment.studentCount}
-    />
-  ) : (
-    <SubmissionPanel
-      classroomId={classroomId}
-      assignmentId={assignmentId}
-      dueDate={assignment.dueDate}
-      initialView={await getStudentSubmission(assignmentId)}
-    />
-  );
+  let submissionPanel: ReactNode;
+  if (assignment.canManage) {
+    const overview = await getAssignmentSubmissions(classroomId, assignmentId);
+    if (!overview) {
+      // Defensive only: assignment.canManage already confirms access to this
+      // classroom, so the service call underneath should never actually 404/403 here.
+      notFound();
+    }
+    submissionPanel = (
+      <SubmissionOverviewCard
+        classroomId={classroomId}
+        assignmentId={assignmentId}
+        overview={overview}
+      />
+    );
+  } else {
+    submissionPanel = (
+      <SubmissionPanel
+        classroomId={classroomId}
+        assignmentId={assignmentId}
+        studentId={user.id}
+        dueDate={assignment.dueDate}
+        initialView={await getStudentSubmission(assignmentId)}
+        initialComments={await getOwnSubmissionComments(assignmentId)}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">

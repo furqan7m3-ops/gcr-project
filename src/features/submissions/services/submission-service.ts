@@ -1,21 +1,30 @@
 import { randomUUID } from "node:crypto";
 
 import type { SessionUser } from "@/auth/session";
+import { assertManagementAccess } from "@/features/classroom/services/classroom-service";
 import { canManageClassroom } from "@/features/classroom/lib/can-manage";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
-import { getFileAttachmentsByEntityIds } from "@/lib/file-attachments";
+import { getFileAttachmentsByEntityIds, type AttachedFileSummary } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   AssignmentStatus,
+  ClassroomMembershipRole,
   ClassroomMembershipStatus,
   ClassroomStatus,
+  CommentVisibility,
   FileAttachmentType,
   SubmissionStatus,
   UserRole,
 } from "@/generated/prisma/enums";
 
-import type { SubmissionView } from "../types";
+import { toDisplayStatus } from "../lib/display-status";
+import type {
+  PrivateCommentSummary,
+  SubmissionOverview,
+  SubmissionReviewDetail,
+  SubmissionView,
+} from "../types";
 
 export interface FileMeta {
   fileName: string;
@@ -93,13 +102,24 @@ function assertAssignmentAcceptsWork(assignment: AssignmentContext): void {
   }
 }
 
-async function findOwnSubmission(assignmentId: string, studentId: string) {
+async function findSubmissionByAssignmentAndStudent(assignmentId: string, studentId: string) {
   return prisma.submission.findUnique({
     where: { assignmentId_studentId: { assignmentId, studentId } },
   });
 }
 
-type SubmissionRow = NonNullable<Awaited<ReturnType<typeof findOwnSubmission>>>;
+type SubmissionRow = NonNullable<Awaited<ReturnType<typeof findSubmissionByAssignmentAndStudent>>>;
+
+// A student's in-progress draft (status ASSIGNED) is never visible to a
+// teacher - it's treated identically to "no submission at all" everywhere a
+// teacher looks (overview counts, the review page, and private comments).
+// Only the student's own queries see draft content.
+function toTeacherVisibleSubmission(row: SubmissionRow | null): SubmissionRow | null {
+  if (!row || row.deletedAt || row.status === SubmissionStatus.ASSIGNED) {
+    return null;
+  }
+  return row;
+}
 
 async function upsertSubmissionRow(
   tx: Prisma.TransactionClient,
@@ -165,6 +185,7 @@ function toSubmissionView(
       status: submission.status,
       submittedAt: submission.submittedAt,
       updatedAt: submission.updatedAt,
+      returnedAt: submission.returnedAt,
       attachments,
     },
     canEdit,
@@ -179,7 +200,7 @@ export async function getSubmissionForStudent(
   const assignment = await loadAssignmentContext(assignmentId);
   await assertStudentEligibility(assignment.classroomId, user);
 
-  const submission = await findOwnSubmission(assignmentId, user.id);
+  const submission = await findSubmissionByAssignmentAndStudent(assignmentId, user.id);
 
   if (!submission || submission.deletedAt) {
     return toSubmissionView(null, assignment, []);
@@ -208,7 +229,7 @@ export async function createOrUpdateSubmission(
   await assertStudentEligibility(assignment.classroomId, user);
   assertAssignmentAcceptsWork(assignment);
 
-  const existing = await findOwnSubmission(assignmentId, user.id);
+  const existing = await findSubmissionByAssignmentAndStudent(assignmentId, user.id);
 
   if (existing && existing.status !== SubmissionStatus.ASSIGNED) {
     throw new ClassroomServiceError(
@@ -250,7 +271,7 @@ export async function submitSubmission(
   await assertStudentEligibility(assignment.classroomId, user);
   assertAssignmentAcceptsWork(assignment);
 
-  const existing = await findOwnSubmission(assignmentId, user.id);
+  const existing = await findSubmissionByAssignmentAndStudent(assignmentId, user.id);
 
   if (existing && existing.status !== SubmissionStatus.ASSIGNED) {
     throw new ClassroomServiceError(
@@ -301,7 +322,7 @@ export async function unsubmitSubmission(
   const assignment = await loadAssignmentContext(assignmentId);
   await assertStudentEligibility(assignment.classroomId, user);
 
-  const existing = await findOwnSubmission(assignmentId, user.id);
+  const existing = await findSubmissionByAssignmentAndStudent(assignmentId, user.id);
 
   if (!existing || existing.status !== SubmissionStatus.SUBMITTED) {
     throw new ClassroomServiceError(
@@ -375,4 +396,317 @@ export async function removeSubmissionAttachment(
   }
 
   await prisma.fileAttachment.delete({ where: { id: fileAttachmentId } });
+}
+
+// ---------------------------------------------------------------------------
+// Teacher review workflow (Phase 9.2) - everything below is manager-only,
+// scoped to the specific classroom the assignment belongs to.
+// ---------------------------------------------------------------------------
+
+/** Confirms the assignment exists, isn't deleted, and actually belongs to this classroom. */
+async function assertAssignmentInClassroom(
+  classroomId: string,
+  assignmentId: string,
+): Promise<void> {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: { classroomId: true, deletedAt: true },
+  });
+
+  if (!assignment || assignment.deletedAt || assignment.classroomId !== classroomId) {
+    throw new ClassroomServiceError("NOT_FOUND", "Assignment not found.");
+  }
+}
+
+function toDisplayName(user: { image: string | null; avatarUrl: string | null }): string | null {
+  return user.image ?? user.avatarUrl ?? null;
+}
+
+export async function getAssignmentSubmissions(
+  classroomId: string,
+  assignmentId: string,
+  user: SessionUser,
+): Promise<SubmissionOverview> {
+  // Per-classroom check (not just "is a teacher somewhere") - a teacher who
+  // doesn't manage this specific classroom gets FORBIDDEN, full stop.
+  await assertManagementAccess(classroomId, user);
+  await assertAssignmentInClassroom(classroomId, assignmentId);
+
+  const members = await prisma.classroomMembership.findMany({
+    where: {
+      classroomId,
+      status: ClassroomMembershipStatus.ACTIVE,
+      role: ClassroomMembershipRole.STUDENT,
+    },
+    include: { user: { select: { id: true, name: true, image: true, avatarUrl: true } } },
+    orderBy: { user: { name: "asc" } },
+  });
+
+  const submissions = await prisma.submission.findMany({
+    where: {
+      assignmentId,
+      deletedAt: null,
+      studentId: { in: members.map((member) => member.userId) },
+    },
+  });
+  const submissionByStudentId = new Map(submissions.map((row) => [row.studentId, row]));
+
+  const rows = members.map((member) => {
+    // A draft-in-progress (ASSIGNED) submission is invisible to the teacher -
+    // it reads exactly like the student never started, by design.
+    const submission = toTeacherVisibleSubmission(submissionByStudentId.get(member.userId) ?? null);
+    return {
+      studentId: member.userId,
+      studentName: member.user.name,
+      studentImage: toDisplayName(member.user),
+      displayStatus: toDisplayStatus(submission?.status ?? null),
+      submittedAt: submission?.submittedAt ?? null,
+      updatedAt: submission?.updatedAt ?? null,
+      hasSubmission: submission !== null,
+    };
+  });
+
+  const overview: SubmissionOverview = {
+    totalStudents: rows.length,
+    submitted: 0,
+    notSubmitted: 0,
+    late: 0,
+    returned: 0,
+    rows,
+  };
+
+  for (const row of rows) {
+    if (row.displayStatus === "SUBMITTED") overview.submitted += 1;
+    else if (row.displayStatus === "NOT_SUBMITTED") overview.notSubmitted += 1;
+    else if (row.displayStatus === "LATE") overview.late += 1;
+    else if (row.displayStatus === "RETURNED") overview.returned += 1;
+  }
+
+  return overview;
+}
+
+async function assertActiveStudentOfClassroom(
+  classroomId: string,
+  studentId: string,
+): Promise<void> {
+  const membership = await prisma.classroomMembership.findUnique({
+    where: { classroomId_userId: { classroomId, userId: studentId } },
+  });
+
+  if (
+    !membership ||
+    membership.status !== ClassroomMembershipStatus.ACTIVE ||
+    canManageClassroom(membership.role)
+  ) {
+    throw new ClassroomServiceError("NOT_FOUND", "Student not found in this classroom.");
+  }
+}
+
+async function listPrivateComments(
+  submissionId: string,
+  viewerId: string,
+  studentId: string,
+): Promise<PrivateCommentSummary[]> {
+  const comments = await prisma.comment.findMany({
+    where: { submissionId, deletedAt: null, visibility: CommentVisibility.PRIVATE },
+    include: { author: { select: { id: true, name: true, image: true, avatarUrl: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Only the owning student or a classroom manager can ever author a private
+  // comment on this submission (enforced in createPrivateComment) - so any
+  // author who isn't the student is necessarily a teacher. No extra query needed.
+  return comments.map((comment) => ({
+    id: comment.id,
+    content: comment.content,
+    createdAt: comment.createdAt,
+    author: {
+      id: comment.author.id,
+      name: comment.author.name,
+      image: toDisplayName(comment.author),
+      isTeacher: comment.authorId !== studentId,
+    },
+    canDelete: comment.authorId === viewerId,
+  }));
+}
+
+export async function getSubmissionDetails(
+  classroomId: string,
+  assignmentId: string,
+  studentId: string,
+  user: SessionUser,
+): Promise<SubmissionReviewDetail> {
+  await assertManagementAccess(classroomId, user);
+  await assertAssignmentInClassroom(classroomId, assignmentId);
+  await assertActiveStudentOfClassroom(classroomId, studentId);
+
+  const student = await prisma.user.findUnique({
+    where: { id: studentId },
+    select: { id: true, name: true, image: true, avatarUrl: true },
+  });
+
+  if (!student) {
+    throw new ClassroomServiceError("NOT_FOUND", "Student not found in this classroom.");
+  }
+
+  const submission = toTeacherVisibleSubmission(
+    await findSubmissionByAssignmentAndStudent(assignmentId, studentId),
+  );
+
+  const [attachmentsBySubmissionId, comments] = await Promise.all([
+    submission
+      ? getFileAttachmentsByEntityIds([submission.id], FileAttachmentType.SUBMISSION)
+      : Promise.resolve(new Map<string, AttachedFileSummary[]>()),
+    submission ? listPrivateComments(submission.id, user.id, studentId) : Promise.resolve([]),
+  ]);
+
+  return {
+    student: { id: student.id, name: student.name, image: toDisplayName(student) },
+    submission: submission
+      ? {
+          id: submission.id,
+          textAnswer: submission.textAnswer,
+          status: submission.status,
+          submittedAt: submission.submittedAt,
+          updatedAt: submission.updatedAt,
+          returnedAt: submission.returnedAt,
+          attachments: attachmentsBySubmissionId.get(submission.id) ?? [],
+        }
+      : null,
+    canReturn:
+      submission !== null &&
+      (submission.status === SubmissionStatus.SUBMITTED ||
+        submission.status === SubmissionStatus.LATE),
+    comments,
+  };
+}
+
+export async function getOwnSubmissionComments(
+  assignmentId: string,
+  user: SessionUser,
+): Promise<PrivateCommentSummary[]> {
+  const assignment = await loadAssignmentContext(assignmentId);
+  await assertStudentEligibility(assignment.classroomId, user);
+
+  const submission = await findSubmissionByAssignmentAndStudent(assignmentId, user.id);
+
+  if (!submission || submission.deletedAt) {
+    return [];
+  }
+
+  return listPrivateComments(submission.id, user.id, user.id);
+}
+
+export async function createPrivateComment(
+  classroomId: string,
+  assignmentId: string,
+  studentId: string,
+  user: SessionUser,
+  content: string,
+): Promise<PrivateCommentSummary> {
+  await assertAssignmentInClassroom(classroomId, assignmentId);
+
+  const isOwner = user.id === studentId;
+  if (isOwner) {
+    await assertStudentEligibility(classroomId, user);
+  } else {
+    await assertManagementAccess(classroomId, user);
+    await assertActiveStudentOfClassroom(classroomId, studentId);
+  }
+
+  const rawSubmission = await findSubmissionByAssignmentAndStudent(assignmentId, studentId);
+  // A teacher can't comment on (or thereby detect) a draft-in-progress - only
+  // the owning student can interact with their own submission at that stage.
+  const submission = isOwner
+    ? rawSubmission && !rawSubmission.deletedAt
+      ? rawSubmission
+      : null
+    : toTeacherVisibleSubmission(rawSubmission);
+
+  if (!submission) {
+    throw new ClassroomServiceError("VALIDATION_ERROR", "There's no submission to comment on yet.");
+  }
+
+  const created = await prisma.comment.create({
+    data: {
+      submissionId: submission.id,
+      authorId: user.id,
+      content,
+      visibility: CommentVisibility.PRIVATE,
+    },
+    include: { author: { select: { id: true, name: true, image: true, avatarUrl: true } } },
+  });
+
+  return {
+    id: created.id,
+    content: created.content,
+    createdAt: created.createdAt,
+    author: {
+      id: created.author.id,
+      name: created.author.name,
+      image: toDisplayName(created.author),
+      isTeacher: created.authorId !== studentId,
+    },
+    canDelete: true,
+  };
+}
+
+export async function deletePrivateComment(commentId: string, user: SessionUser): Promise<void> {
+  const comment = await prisma.comment.findUnique({ where: { id: commentId } });
+
+  if (!comment || comment.deletedAt || !comment.submissionId) {
+    throw new ClassroomServiceError("NOT_FOUND", "Comment not found.");
+  }
+
+  // Deletion is author-only in this phase - even a teacher can't remove a
+  // student's private comment (or another teacher's), only their own.
+  if (comment.authorId !== user.id) {
+    throw new ClassroomServiceError("FORBIDDEN", "You can only delete your own comments.");
+  }
+
+  await prisma.comment.update({ where: { id: commentId }, data: { deletedAt: new Date() } });
+}
+
+export async function returnSubmission(
+  classroomId: string,
+  assignmentId: string,
+  studentId: string,
+  user: SessionUser,
+): Promise<SubmissionReviewDetail> {
+  await assertManagementAccess(classroomId, user);
+  await assertAssignmentInClassroom(classroomId, assignmentId);
+  await assertActiveStudentOfClassroom(classroomId, studentId);
+
+  const submission = await findSubmissionByAssignmentAndStudent(assignmentId, studentId);
+
+  if (!submission || submission.deletedAt) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      "This student hasn't submitted anything yet.",
+    );
+  }
+
+  if (submission.status === SubmissionStatus.RETURNED) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      "This submission has already been returned.",
+    );
+  }
+
+  if (
+    submission.status !== SubmissionStatus.SUBMITTED &&
+    submission.status !== SubmissionStatus.LATE
+  ) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      "Only a turned-in submission can be returned.",
+    );
+  }
+
+  await prisma.submission.update({
+    where: { id: submission.id },
+    data: { status: SubmissionStatus.RETURNED, returnedAt: new Date() },
+  });
+
+  return getSubmissionDetails(classroomId, assignmentId, studentId, user);
 }

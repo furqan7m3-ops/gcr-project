@@ -9,13 +9,7 @@ import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { getFileAttachmentsByEntityIds, type AttachedFileSummary } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import {
-  AssignmentStatus,
-  ClassroomMembershipRole,
-  ClassroomMembershipStatus,
-  ClassroomStatus,
-  FileAttachmentType,
-} from "@/generated/prisma/enums";
+import { AssignmentStatus, ClassroomStatus, FileAttachmentType } from "@/generated/prisma/enums";
 
 import { assertTopicBelongsToClassroom } from "./topic-service";
 import type { AssignmentSummary } from "../types";
@@ -73,26 +67,11 @@ async function findActiveAssignmentOrThrow(assignmentId: string) {
   return assignment;
 }
 
-/** Active students count toward "submitted" totals shown to teachers. */
-async function countActiveStudents(classroomId: string): Promise<number> {
-  return prisma.classroomMembership.count({
-    where: {
-      classroomId,
-      status: ClassroomMembershipStatus.ACTIVE,
-      role: ClassroomMembershipRole.STUDENT,
-    },
-  });
-}
-
-export interface AssignmentDetail extends AssignmentSummary {
-  studentCount: number;
-}
-
 export async function getAssignmentForUser(
   classroomId: string,
   assignmentId: string,
   viewer: SessionUser,
-): Promise<AssignmentDetail> {
+): Promise<AssignmentSummary> {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
     include: assignmentWithAuthorInclude(),
@@ -109,19 +88,16 @@ export async function getAssignmentForUser(
     throw new ClassroomServiceError("NOT_FOUND", "Assignment not found.");
   }
 
-  const [attachmentsByAssignmentId, studentCount] = await Promise.all([
-    getFileAttachmentsByEntityIds([assignment.id], FileAttachmentType.ASSIGNMENT),
-    canManage ? countActiveStudents(assignment.classroomId) : Promise.resolve(0),
-  ]);
+  const attachmentsByAssignmentId = await getFileAttachmentsByEntityIds(
+    [assignment.id],
+    FileAttachmentType.ASSIGNMENT,
+  );
 
-  return {
-    ...toAssignmentSummary(
-      assignment,
-      attachmentsByAssignmentId.get(assignment.id) ?? [],
-      canManage,
-    ),
-    studentCount,
-  };
+  return toAssignmentSummary(
+    assignment,
+    attachmentsByAssignmentId.get(assignment.id) ?? [],
+    canManage,
+  );
 }
 
 export async function listClassroomAssignments(
