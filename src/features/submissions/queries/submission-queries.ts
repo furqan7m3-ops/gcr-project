@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/permissions";
 
 import * as submissionService from "../services/submission-service";
 import type {
+  GradeSummary,
   PrivateCommentSummary,
   SubmissionOverview,
   SubmissionReviewDetail,
@@ -13,6 +14,15 @@ import type {
 // this only requires a signed-in user. Ownership and assignment-state rules are
 // enforced inside the service itself.
 export async function getStudentSubmission(assignmentId: string): Promise<SubmissionView> {
+  const user = await requireUser();
+  return submissionService.getSubmissionForStudent(assignmentId, user);
+}
+
+// A student's own grade/feedback already lives inside SubmissionView.submission
+// (gated to RETURNED-only by the service) - this is a thin, explicitly-named
+// alias over the same call so "Student Grade View" has its own entry point
+// per the phase spec, without a second parallel data-fetching path.
+export async function getSubmissionGrade(assignmentId: string): Promise<SubmissionView> {
   const user = await requireUser();
   return submissionService.getSubmissionForStudent(assignmentId, user);
 }
@@ -56,6 +66,25 @@ export async function getSubmissionDetails(
 
   try {
     return await submissionService.getSubmissionDetails(classroomId, assignmentId, studentId, user);
+  } catch (error) {
+    if (
+      error instanceof ClassroomServiceError &&
+      (error.code === "NOT_FOUND" || error.code === "FORBIDDEN")
+    ) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function getAssignmentGradeSummary(
+  classroomId: string,
+  assignmentId: string,
+): Promise<GradeSummary | null> {
+  const user = await requireUser();
+
+  try {
+    return await submissionService.getAssignmentGradeSummary(classroomId, assignmentId, user);
   } catch (error) {
     if (
       error instanceof ClassroomServiceError &&

@@ -43,6 +43,7 @@ export default async function SubmissionReviewPage({
         assignmentId={assignmentId}
         studentId={studentId}
         dueDate={assignment.dueDate}
+        maxPoints={assignment.points}
         initialDetail={detail}
       />
     </div>

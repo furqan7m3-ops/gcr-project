@@ -20,6 +20,7 @@ import {
 
 import { toDisplayStatus } from "../lib/display-status";
 import type {
+  GradeSummary,
   PrivateCommentSummary,
   SubmissionOverview,
   SubmissionReviewDetail,
@@ -34,6 +35,11 @@ export interface FileMeta {
 
 export interface SubmissionInput {
   textAnswer?: string;
+}
+
+export interface GradeInput {
+  grade: number;
+  feedback?: string;
 }
 
 type AssignmentContext = {
@@ -178,6 +184,11 @@ function toSubmissionView(
     assignment.status !== AssignmentStatus.CLOSED &&
     !dueDatePassed;
 
+  // Grading is invisible to the student until the teacher actually returns
+  // the work - the columns may already hold a value while REVIEWED (grading
+  // in progress), but that must never leak to the student early.
+  const isReturned = submission.status === SubmissionStatus.RETURNED;
+
   return {
     submission: {
       id: submission.id,
@@ -186,6 +197,9 @@ function toSubmissionView(
       submittedAt: submission.submittedAt,
       updatedAt: submission.updatedAt,
       returnedAt: submission.returnedAt,
+      grade: isReturned ? submission.grade : null,
+      feedback: isReturned ? submission.feedback : null,
+      gradedAt: isReturned ? submission.gradedAt : null,
       attachments,
     },
     canEdit,
@@ -418,6 +432,46 @@ async function assertAssignmentInClassroom(
   }
 }
 
+type ManagedAssignment = {
+  id: string;
+  classroomId: string;
+  status: AssignmentStatus;
+  dueDate: Date | null;
+  points: number | null;
+};
+
+/**
+ * The manager-only counterpart to assertAssignmentInClassroom - asserts
+ * management access to classroomId first (cheap, no assignment row needed),
+ * then loads the fields grading/review functions need (status, dueDate,
+ * points) so they don't each issue their own follow-up query.
+ */
+async function loadAssignmentForManager(
+  classroomId: string,
+  assignmentId: string,
+  user: SessionUser,
+): Promise<ManagedAssignment> {
+  await assertManagementAccess(classroomId, user);
+
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: {
+      id: true,
+      classroomId: true,
+      status: true,
+      dueDate: true,
+      points: true,
+      deletedAt: true,
+    },
+  });
+
+  if (!assignment || assignment.deletedAt || assignment.classroomId !== classroomId) {
+    throw new ClassroomServiceError("NOT_FOUND", "Assignment not found.");
+  }
+
+  return assignment;
+}
+
 function toDisplayName(user: { image: string | null; avatarUrl: string | null }): string | null {
   return user.image ?? user.avatarUrl ?? null;
 }
@@ -429,8 +483,7 @@ export async function getAssignmentSubmissions(
 ): Promise<SubmissionOverview> {
   // Per-classroom check (not just "is a teacher somewhere") - a teacher who
   // doesn't manage this specific classroom gets FORBIDDEN, full stop.
-  await assertManagementAccess(classroomId, user);
-  await assertAssignmentInClassroom(classroomId, assignmentId);
+  const assignment = await loadAssignmentForManager(classroomId, assignmentId, user);
 
   const members = await prisma.classroomMembership.findMany({
     where: {
@@ -455,13 +508,19 @@ export async function getAssignmentSubmissions(
     // A draft-in-progress (ASSIGNED) submission is invisible to the teacher -
     // it reads exactly like the student never started, by design.
     const submission = toTeacherVisibleSubmission(submissionByStudentId.get(member.userId) ?? null);
+    // REVIEWED collapses the original on-time/late distinction into one enum
+    // value - recompute it from submittedAt vs. the due date for display.
+    const wasLate = Boolean(
+      submission?.submittedAt && assignment.dueDate && submission.submittedAt > assignment.dueDate,
+    );
     return {
       studentId: member.userId,
       studentName: member.user.name,
       studentImage: toDisplayName(member.user),
-      displayStatus: toDisplayStatus(submission?.status ?? null),
+      displayStatus: toDisplayStatus(submission?.status ?? null, { wasLate }),
       submittedAt: submission?.submittedAt ?? null,
       updatedAt: submission?.updatedAt ?? null,
+      grade: submission?.grade ?? null,
       hasSubmission: submission !== null,
     };
   });
@@ -536,8 +595,7 @@ export async function getSubmissionDetails(
   studentId: string,
   user: SessionUser,
 ): Promise<SubmissionReviewDetail> {
-  await assertManagementAccess(classroomId, user);
-  await assertAssignmentInClassroom(classroomId, assignmentId);
+  const assignment = await loadAssignmentForManager(classroomId, assignmentId, user);
   await assertActiveStudentOfClassroom(classroomId, studentId);
 
   const student = await prisma.user.findUnique({
@@ -560,6 +618,12 @@ export async function getSubmissionDetails(
     submission ? listPrivateComments(submission.id, user.id, studentId) : Promise.resolve([]),
   ]);
 
+  const canReturn =
+    submission !== null &&
+    (submission.status === SubmissionStatus.SUBMITTED ||
+      submission.status === SubmissionStatus.LATE ||
+      submission.status === SubmissionStatus.REVIEWED);
+
   return {
     student: { id: student.id, name: student.name, image: toDisplayName(student) },
     submission: submission
@@ -570,13 +634,17 @@ export async function getSubmissionDetails(
           submittedAt: submission.submittedAt,
           updatedAt: submission.updatedAt,
           returnedAt: submission.returnedAt,
+          grade: submission.grade,
+          feedback: submission.feedback,
+          gradedAt: submission.gradedAt,
           attachments: attachmentsBySubmissionId.get(submission.id) ?? [],
         }
       : null,
-    canReturn:
+    canReturn,
+    canGrade:
       submission !== null &&
-      (submission.status === SubmissionStatus.SUBMITTED ||
-        submission.status === SubmissionStatus.LATE),
+      submission.status !== SubmissionStatus.RETURNED &&
+      assignment.points !== null,
     comments,
   };
 }
@@ -667,14 +735,19 @@ export async function deletePrivateComment(commentId: string, user: SessionUser)
   await prisma.comment.update({ where: { id: commentId }, data: { deletedAt: new Date() } });
 }
 
+/**
+ * Returns a submission to the student - whether or not it's been graded.
+ * A grade already set (status REVIEWED) gets locked and timestamped here,
+ * not when it was first assigned - matching Google Classroom, where a grade
+ * stays private and editable until the teacher explicitly returns it.
+ */
 export async function returnSubmission(
   classroomId: string,
   assignmentId: string,
   studentId: string,
   user: SessionUser,
 ): Promise<SubmissionReviewDetail> {
-  await assertManagementAccess(classroomId, user);
-  await assertAssignmentInClassroom(classroomId, assignmentId);
+  await loadAssignmentForManager(classroomId, assignmentId, user);
   await assertActiveStudentOfClassroom(classroomId, studentId);
 
   const submission = await findSubmissionByAssignmentAndStudent(assignmentId, studentId);
@@ -695,7 +768,8 @@ export async function returnSubmission(
 
   if (
     submission.status !== SubmissionStatus.SUBMITTED &&
-    submission.status !== SubmissionStatus.LATE
+    submission.status !== SubmissionStatus.LATE &&
+    submission.status !== SubmissionStatus.REVIEWED
   ) {
     throw new ClassroomServiceError(
       "VALIDATION_ERROR",
@@ -703,10 +777,118 @@ export async function returnSubmission(
     );
   }
 
+  const now = new Date();
   await prisma.submission.update({
     where: { id: submission.id },
-    data: { status: SubmissionStatus.RETURNED, returnedAt: new Date() },
+    data: {
+      status: SubmissionStatus.RETURNED,
+      returnedAt: now,
+      gradedAt: submission.grade !== null ? now : null,
+    },
   });
 
   return getSubmissionDetails(classroomId, assignmentId, studentId, user);
+}
+
+/** Shared upsert used by both the initial grade-entry and edit-before-return flows. */
+export async function setSubmissionGrade(
+  classroomId: string,
+  assignmentId: string,
+  studentId: string,
+  user: SessionUser,
+  input: GradeInput,
+): Promise<SubmissionReviewDetail> {
+  const assignment = await loadAssignmentForManager(classroomId, assignmentId, user);
+  await assertActiveStudentOfClassroom(classroomId, studentId);
+
+  if (assignment.status === AssignmentStatus.DRAFT) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      "This assignment hasn't been published yet.",
+    );
+  }
+
+  if (assignment.points === null) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      "This assignment has no maximum points set, so it can't be graded.",
+    );
+  }
+
+  if (input.grade < 0) {
+    throw new ClassroomServiceError("VALIDATION_ERROR", "Grade cannot be negative.");
+  }
+
+  if (input.grade > assignment.points) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      `Grade cannot exceed the maximum of ${assignment.points} points.`,
+    );
+  }
+
+  const submission = toTeacherVisibleSubmission(
+    await findSubmissionByAssignmentAndStudent(assignmentId, studentId),
+  );
+
+  if (!submission) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      "This student hasn't submitted anything yet.",
+    );
+  }
+
+  if (submission.status === SubmissionStatus.RETURNED) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      "This submission has already been returned - the grade is locked.",
+    );
+  }
+
+  await prisma.submission.update({
+    where: { id: submission.id },
+    data: {
+      grade: input.grade,
+      feedback: input.feedback ?? null,
+      status: SubmissionStatus.REVIEWED,
+    },
+  });
+
+  return getSubmissionDetails(classroomId, assignmentId, studentId, user);
+}
+
+export async function getAssignmentGradeSummary(
+  classroomId: string,
+  assignmentId: string,
+  user: SessionUser,
+): Promise<GradeSummary> {
+  await loadAssignmentForManager(classroomId, assignmentId, user);
+
+  const [aggregate, pendingCount, returnedCount] = await Promise.all([
+    prisma.submission.aggregate({
+      where: { assignmentId, deletedAt: null, grade: { not: null } },
+      _avg: { grade: true },
+      _max: { grade: true },
+      _min: { grade: true },
+      _count: { grade: true },
+    }),
+    prisma.submission.count({
+      where: {
+        assignmentId,
+        deletedAt: null,
+        status: { in: [SubmissionStatus.SUBMITTED, SubmissionStatus.LATE] },
+      },
+    }),
+    prisma.submission.count({
+      where: { assignmentId, deletedAt: null, status: SubmissionStatus.RETURNED },
+    }),
+  ]);
+
+  return {
+    gradedCount: aggregate._count.grade,
+    pendingCount,
+    returnedCount,
+    averageGrade: aggregate._avg.grade,
+    highestGrade: aggregate._max.grade,
+    lowestGrade: aggregate._min.grade,
+  };
 }

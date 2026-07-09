@@ -14,6 +14,7 @@ import type {
 import {
   classroomAssignmentIdSchema,
   deletePrivateCommentSchema,
+  gradeInputSchema,
   privateCommentSchema,
   removeAttachmentSchema,
   studentSubmissionIdSchema,
@@ -219,7 +220,10 @@ export async function deletePrivateCommentAction(
   }
 }
 
-export async function returnSubmissionAction(
+// Handles both a plain (ungraded) return and a graded one - if a grade was
+// already set via gradeSubmissionAction/updateGradeAction, returning locks
+// it and stamps gradedAt; otherwise it just marks the work reviewed.
+export async function returnGradedSubmissionAction(
   classroomId: string,
   assignmentId: string,
   studentId: string,
@@ -248,4 +252,71 @@ export async function returnSubmissionAction(
   } catch (error) {
     return toErrorResult(error, "Couldn't return this submission. Please try again.");
   }
+}
+
+async function gradeSubmission(
+  classroomId: string,
+  assignmentId: string,
+  studentId: string,
+  grade: number,
+  feedback: string | undefined,
+): Promise<ActionResult<SubmissionReviewDetail>> {
+  try {
+    const user = await requireUser();
+
+    const parsed = gradeInputSchema.safeParse({
+      classroomId,
+      assignmentId,
+      studentId,
+      grade,
+      feedback,
+    });
+    if (!parsed.success) {
+      return {
+        status: "error",
+        message: "Please fix the highlighted fields.",
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    const detail = await submissionService.setSubmissionGrade(
+      parsed.data.classroomId,
+      parsed.data.assignmentId,
+      parsed.data.studentId,
+      user,
+      { grade: parsed.data.grade, feedback: parsed.data.feedback },
+    );
+    revalidateSubmissionPaths(
+      parsed.data.classroomId,
+      parsed.data.assignmentId,
+      parsed.data.studentId,
+    );
+
+    return { status: "success", data: detail };
+  } catch (error) {
+    return toErrorResult(error, "Couldn't save the grade. Please try again.");
+  }
+}
+
+// gradeSubmissionAction and updateGradeAction are intentionally identical -
+// both are the initial-entry and edit-before-return moments of the same
+// underlying upsert, named separately to match the two UI actions they back.
+export async function gradeSubmissionAction(
+  classroomId: string,
+  assignmentId: string,
+  studentId: string,
+  grade: number,
+  feedback: string | undefined,
+): Promise<ActionResult<SubmissionReviewDetail>> {
+  return gradeSubmission(classroomId, assignmentId, studentId, grade, feedback);
+}
+
+export async function updateGradeAction(
+  classroomId: string,
+  assignmentId: string,
+  studentId: string,
+  grade: number,
+  feedback: string | undefined,
+): Promise<ActionResult<SubmissionReviewDetail>> {
+  return gradeSubmission(classroomId, assignmentId, studentId, grade, feedback);
 }

@@ -357,6 +357,11 @@ model Submission {
   returnedAt    DateTime?
   status        SubmissionStatus @default(ASSIGNED)
   privateComment String?         @db.Text
+  // Grading (Phase 9.3): grade is bounded by Assignment.points at the service
+  // layer, not the schema - Prisma has no cross-column check constraints.
+  grade         Int?
+  feedback      String?          @db.Text
+  gradedAt      DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   deletedAt     DateTime?

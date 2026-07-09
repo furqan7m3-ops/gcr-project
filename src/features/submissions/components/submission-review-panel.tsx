@@ -9,12 +9,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { usePendingAction } from "@/hooks/use-pending-action";
 import { getInitials } from "@/lib/utils";
 
-import { returnSubmissionAction } from "../actions/submission-mutations";
+import {
+  gradeSubmissionAction,
+  returnGradedSubmissionAction,
+  updateGradeAction,
+} from "../actions/submission-mutations";
 import { toDisplayStatus } from "../lib/display-status";
+import { formatGrade } from "../lib/format-grade";
 import type { SubmissionReviewDetail } from "../types";
+import { GradeBadge } from "./grade-badge";
 import { PrivateCommentPanel } from "./private-comment-panel";
 import { SubmissionAttachmentList } from "./submission-attachment-list";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -32,6 +41,7 @@ interface SubmissionReviewPanelProps {
   assignmentId: string;
   studentId: string;
   dueDate: Date | null;
+  maxPoints: number | null;
   initialDetail: SubmissionReviewDetail;
 }
 
@@ -40,19 +50,43 @@ export function SubmissionReviewPanel({
   assignmentId,
   studentId,
   dueDate,
+  maxPoints,
   initialDetail,
 }: SubmissionReviewPanelProps) {
   const router = useRouter();
   const [detail, setDetail] = useState(initialDetail);
+  const [gradeValue, setGradeValue] = useState(detail.submission?.grade?.toString() ?? "");
+  const [feedbackValue, setFeedbackValue] = useState(detail.submission?.feedback ?? "");
   const [returnConfirmOpen, setReturnConfirmOpen] = useState(false);
 
-  const returnSubmission = usePendingAction(
-    () => returnSubmissionAction(classroomId, assignmentId, studentId),
+  function applyDetail(next: SubmissionReviewDetail) {
+    setDetail(next);
+    setGradeValue(next.submission?.grade?.toString() ?? "");
+    setFeedbackValue(next.submission?.feedback ?? "");
+    router.refresh();
+  }
+
+  const hasExistingGrade =
+    detail.submission?.grade !== null && detail.submission?.grade !== undefined;
+
+  const saveGrade = usePendingAction(
+    () => {
+      const grade = Number(gradeValue);
+      const action = hasExistingGrade ? updateGradeAction : gradeSubmissionAction;
+      return action(classroomId, assignmentId, studentId, grade, feedbackValue || undefined);
+    },
     (data) => {
-      setDetail(data);
+      applyDetail(data);
+      toast.success("Grade saved");
+    },
+  );
+
+  const returnSubmission = usePendingAction(
+    () => returnGradedSubmissionAction(classroomId, assignmentId, studentId),
+    (data) => {
+      applyDetail(data);
       setReturnConfirmOpen(false);
       toast.success("Submission returned");
-      router.refresh();
     },
   );
 
@@ -60,6 +94,13 @@ export function SubmissionReviewPanel({
   const submittedAtLabel = formatDateTime(detail.submission?.submittedAt ?? null);
   const updatedAtLabel = formatDateTime(detail.submission?.updatedAt ?? null);
   const returnedAtLabel = formatDateTime(detail.submission?.returnedAt ?? null);
+
+  const gradeValueNumber = Number(gradeValue);
+  const isGradeValid =
+    gradeValue.trim() !== "" &&
+    Number.isInteger(gradeValueNumber) &&
+    gradeValueNumber >= 0 &&
+    (maxPoints === null || gradeValueNumber <= maxPoints);
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,12 +170,79 @@ export function SubmissionReviewPanel({
           open={returnConfirmOpen}
           onOpenChange={setReturnConfirmOpen}
           title="Return this submission?"
-          description={`${detail.student.name} will see their work marked as returned. This doesn't assign a grade.`}
+          description={
+            detail.submission?.grade !== null && detail.submission?.grade !== undefined
+              ? `${detail.student.name} will see their grade (${formatGrade(detail.submission.grade, maxPoints)}) and feedback. The grade will be locked.`
+              : `${detail.student.name} will see their work marked as returned. No grade has been entered.`
+          }
           confirmLabel="Return"
           pending={returnSubmission.isPending}
           onConfirm={returnSubmission.run}
         />
       </Card>
+
+      {detail.submission && maxPoints !== null ? (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+            <CardTitle>Grade</CardTitle>
+            <GradeBadge grade={detail.submission.grade} maxPoints={maxPoints} />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {detail.canGrade ? (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="grade-input">Points</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="grade-input"
+                      type="number"
+                      min={0}
+                      max={maxPoints}
+                      step={1}
+                      value={gradeValue}
+                      onChange={(event) => setGradeValue(event.target.value)}
+                      disabled={saveGrade.isPending}
+                      className="w-24"
+                    />
+                    <span className="text-sm text-muted-foreground">/ {maxPoints}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="feedback-input">Feedback</Label>
+                  <Textarea
+                    id="feedback-input"
+                    value={feedbackValue}
+                    onChange={(event) => setFeedbackValue(event.target.value)}
+                    rows={4}
+                    maxLength={5000}
+                    placeholder="Overall feedback for this submission..."
+                    disabled={saveGrade.isPending}
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-fit"
+                  onClick={saveGrade.run}
+                  disabled={!isGradeValid || saveGrade.isPending}
+                >
+                  {saveGrade.isPending
+                    ? "Saving…"
+                    : hasExistingGrade
+                      ? "Update grade"
+                      : "Save grade"}
+                </Button>
+              </>
+            ) : (
+              <p className="whitespace-pre-wrap text-sm text-foreground">
+                {detail.submission.feedback || "No feedback given."}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <PrivateCommentPanel
         classroomId={classroomId}

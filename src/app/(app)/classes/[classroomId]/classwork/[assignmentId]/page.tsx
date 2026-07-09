@@ -10,9 +10,11 @@ import { AssignmentManagementMenu } from "@/features/classwork/components/assign
 import { formatDueDate } from "@/features/classwork/lib/format-assignment";
 import { getAssignmentDetail } from "@/features/classwork/queries/assignment-queries";
 import { listTopicsForClassroom } from "@/features/classwork/queries/topic-queries";
+import { GradeSummaryCard } from "@/features/submissions/components/grade-summary-card";
 import { SubmissionOverviewCard } from "@/features/submissions/components/submission-overview-card";
 import { SubmissionPanel } from "@/features/submissions/components/submission-panel";
 import {
+  getAssignmentGradeSummary,
   getAssignmentSubmissions,
   getOwnSubmissionComments,
   getStudentSubmission,
@@ -40,18 +42,24 @@ export default async function AssignmentDetailPage({
 
   let submissionPanel: ReactNode;
   if (assignment.canManage) {
-    const overview = await getAssignmentSubmissions(classroomId, assignmentId);
-    if (!overview) {
+    const [overview, gradeSummary] = await Promise.all([
+      getAssignmentSubmissions(classroomId, assignmentId),
+      getAssignmentGradeSummary(classroomId, assignmentId),
+    ]);
+    if (!overview || !gradeSummary) {
       // Defensive only: assignment.canManage already confirms access to this
-      // classroom, so the service call underneath should never actually 404/403 here.
+      // classroom, so the service calls underneath should never actually 404/403 here.
       notFound();
     }
     submissionPanel = (
-      <SubmissionOverviewCard
-        classroomId={classroomId}
-        assignmentId={assignmentId}
-        overview={overview}
-      />
+      <>
+        <SubmissionOverviewCard
+          classroomId={classroomId}
+          assignmentId={assignmentId}
+          overview={overview}
+        />
+        <GradeSummaryCard summary={gradeSummary} maxPoints={assignment.points} />
+      </>
     );
   } else {
     submissionPanel = (
@@ -60,6 +68,7 @@ export default async function AssignmentDetailPage({
         assignmentId={assignmentId}
         studentId={user.id}
         dueDate={assignment.dueDate}
+        maxPoints={assignment.points}
         initialView={await getStudentSubmission(assignmentId)}
         initialComments={await getOwnSubmissionComments(assignmentId)}
       />

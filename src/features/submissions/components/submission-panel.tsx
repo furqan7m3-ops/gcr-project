@@ -20,6 +20,7 @@ import {
 } from "../actions/submission-mutations";
 import { toDisplayStatus } from "../lib/display-status";
 import type { PrivateCommentSummary, SubmissionView } from "../types";
+import { GradeBadge } from "./grade-badge";
 import { PrivateCommentPanel } from "./private-comment-panel";
 import { SubmissionAttachmentList } from "./submission-attachment-list";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -37,6 +38,7 @@ interface SubmissionPanelProps {
   assignmentId: string;
   studentId: string;
   dueDate: Date | null;
+  maxPoints: number | null;
   initialView: SubmissionView;
   initialComments: PrivateCommentSummary[];
 }
@@ -46,6 +48,7 @@ export function SubmissionPanel({
   assignmentId,
   studentId,
   dueDate,
+  maxPoints,
   initialView,
   initialComments,
 }: SubmissionPanelProps) {
@@ -159,13 +162,19 @@ export function SubmissionPanel({
   const updatedAtLabel = formatDateTime(view.submission?.updatedAt ?? null);
   const submittedAtLabel = formatDateTime(view.submission?.submittedAt ?? null);
   const returnedAtLabel = formatDateTime(view.submission?.returnedAt ?? null);
+  const wasLate = Boolean(
+    view.submission?.submittedAt && dueDate && view.submission.submittedAt > dueDate,
+  );
+  const isReturned = view.submission?.status === "RETURNED";
 
   return (
     <div className="flex flex-col gap-4">
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
           <CardTitle>Your work</CardTitle>
-          <SubmissionStatusBadge status={toDisplayStatus(view.submission?.status ?? null)} />
+          <SubmissionStatusBadge
+            status={toDisplayStatus(view.submission?.status ?? null, { wasLate })}
+          />
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -290,6 +299,20 @@ export function SubmissionPanel({
           onConfirm={unsubmit.run}
         />
       </Card>
+
+      {isReturned && maxPoints !== null ? (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+            <CardTitle>Grade</CardTitle>
+            <GradeBadge grade={view.submission?.grade ?? null} maxPoints={maxPoints} />
+          </CardHeader>
+          <CardContent>
+            <p className="whitespace-pre-wrap text-sm text-foreground">
+              {view.submission?.feedback || "No feedback given."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <PrivateCommentPanel
         classroomId={classroomId}

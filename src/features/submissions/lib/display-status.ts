@@ -3,12 +3,21 @@ import type { SubmissionStatus } from "@/generated/prisma/enums";
 /**
  * A 5-bucket presentational status shared by the student panel, the teacher's
  * submission list, and the review page - collapses "no row yet" and the raw
- * SubmissionStatus enum (whose REVIEWED/MISSING values are unused this phase)
- * into one consistent vocabulary so every surface labels things identically.
+ * SubmissionStatus enum into one consistent vocabulary so every surface
+ * labels things identically.
  */
 export type SubmissionDisplayStatus = "NOT_SUBMITTED" | "DRAFT" | "SUBMITTED" | "LATE" | "RETURNED";
 
-export function toDisplayStatus(status: SubmissionStatus | null): SubmissionDisplayStatus {
+/**
+ * `wasLate` disambiguates REVIEWED (grading is in progress but not yet
+ * returned) between "Submitted" and "Late" - grading itself is invisible
+ * here on purpose, so REVIEWED must read exactly like its pre-grading state
+ * to anyone who isn't allowed to know grading has started yet.
+ */
+export function toDisplayStatus(
+  status: SubmissionStatus | null,
+  options?: { wasLate?: boolean },
+): SubmissionDisplayStatus {
   switch (status) {
     case "ASSIGNED":
       return "DRAFT";
@@ -16,8 +25,9 @@ export function toDisplayStatus(status: SubmissionStatus | null): SubmissionDisp
       return "SUBMITTED";
     case "LATE":
       return "LATE";
-    case "RETURNED":
     case "REVIEWED":
+      return options?.wasLate ? "LATE" : "SUBMITTED";
+    case "RETURNED":
       return "RETURNED";
     case "MISSING":
     case null:

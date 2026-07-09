@@ -15,6 +15,7 @@ import {
   SUBMISSION_DISPLAY_STATUS_LABEL,
   type SubmissionDisplayStatus,
 } from "../lib/display-status";
+import { formatGrade } from "../lib/format-grade";
 import type { StudentSubmissionRow, SubmissionOverview } from "../types";
 import { SubmissionStatsRow } from "./submission-stats-row";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -53,10 +54,16 @@ function compareRows(a: StudentSubmissionRow, b: StudentSubmissionRow, sortKey: 
 interface SubmissionListProps {
   classroomId: string;
   assignmentId: string;
+  maxPoints: number | null;
   overview: SubmissionOverview;
 }
 
-export function SubmissionList({ classroomId, assignmentId, overview }: SubmissionListProps) {
+export function SubmissionList({
+  classroomId,
+  assignmentId,
+  maxPoints,
+  overview,
+}: SubmissionListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<SubmissionDisplayStatus | "ALL">("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -135,7 +142,7 @@ export function SubmissionList({ classroomId, assignmentId, overview }: Submissi
         />
       ) : (
         <Card>
-          <div className="hidden grid-cols-[1fr_auto_auto_auto] gap-4 border-b border-border px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
+          <div className="hidden grid-cols-[1fr_auto_auto_auto_auto] gap-4 border-b border-border px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
             <button
               type="button"
               className="flex items-center gap-1 text-left"
@@ -153,6 +160,7 @@ export function SubmissionList({ classroomId, assignmentId, overview }: Submissi
             <button type="button" onClick={() => toggleSort("status")}>
               Status
             </button>
+            <span>Grade</span>
             <button type="button" onClick={() => toggleSort("submittedAt")}>
               Submitted
             </button>
@@ -166,7 +174,7 @@ export function SubmissionList({ classroomId, assignmentId, overview }: Submissi
               <li key={row.studentId}>
                 <Link
                   href={`/classes/${classroomId}/classwork/${assignmentId}/submissions/${row.studentId}`}
-                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-sm hover:bg-accent sm:grid-cols-[1fr_auto_auto_auto]"
+                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-sm hover:bg-accent sm:grid-cols-[1fr_auto_auto_auto_auto]"
                 >
                   <span className="flex items-center gap-2.5 truncate">
                     <Avatar className="h-7 w-7 shrink-0">
@@ -181,6 +189,9 @@ export function SubmissionList({ classroomId, assignmentId, overview }: Submissi
                   </span>
                   <span className="justify-self-start sm:justify-self-auto">
                     <SubmissionStatusBadge status={row.displayStatus} />
+                  </span>
+                  <span className="hidden text-xs text-muted-foreground sm:block">
+                    {formatGrade(row.grade, maxPoints)}
                   </span>
                   <span className="hidden text-xs text-muted-foreground sm:block">
                     {formatDateTime(row.submittedAt)}

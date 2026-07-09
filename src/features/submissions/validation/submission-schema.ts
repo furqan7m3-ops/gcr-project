@@ -42,3 +42,18 @@ export const privateCommentSchema = studentSubmissionIdSchema.extend({
 export const deletePrivateCommentSchema = studentSubmissionIdSchema.extend({
   commentId: z.string().uuid("Invalid comment id."),
 });
+
+export const gradeInputSchema = studentSubmissionIdSchema.extend({
+  grade: z.coerce
+    .number({ error: "Enter a valid number." })
+    .int("Grade must be a whole number.")
+    .min(0, "Grade cannot be negative."),
+  feedback: z
+    .string()
+    .max(5000, "Feedback must be at most 5000 characters.")
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+});

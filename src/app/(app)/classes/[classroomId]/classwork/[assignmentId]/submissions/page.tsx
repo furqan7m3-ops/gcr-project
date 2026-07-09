@@ -34,7 +34,12 @@ export default async function SubmissionsListPage({
           { label: "Submissions" },
         ]}
       />
-      <SubmissionList classroomId={classroomId} assignmentId={assignmentId} overview={overview} />
+      <SubmissionList
+        classroomId={classroomId}
+        assignmentId={assignmentId}
+        maxPoints={assignment.points}
+        overview={overview}
+      />
     </div>
   );
 }
