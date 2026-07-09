@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. The repository now contains a working foundation plus several vertical slices of product functionality: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication, the shared authenticated application shell (responsive header/sidebar/navigation), a complete Classroom module (create/join/leave/archive classes, role-based authorization, classroom detail shell with Stream/Classwork/People tabs), and a complete Stream module (announcements with edit/delete/pin, and comments with optimistic UI). Classwork, People, Assignments, and Notifications are still placeholder screens pending future phases.
+GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus several complete vertical slices of product functionality: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication, the shared authenticated application shell (responsive header/sidebar/navigation), a complete Classroom module (create/join/leave/archive classes, role-based authorization, classroom detail shell with Stream/Classwork/People tabs), a complete Stream module (announcements with edit/delete/pin, and comments with optimistic UI), and a complete Classwork module (topics, materials, assignments with a draft/published/closed lifecycle, and a per-assignment detail page). People, Submissions/grading, Notifications, and Search are still placeholder or UI-only screens pending future phases.
 
 ## Architecture
 
@@ -120,7 +120,7 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 **4. Classroom detail**
 
 - Click into a class card. You land on a colored banner header with the class title/section and three tabs: **Stream / Classwork / People**.
-- Classwork and People currently show a "coming soon" placeholder - that's expected, not a bug.
+- Stream and Classwork are fully implemented (see sections 5-10). People still shows a "coming soon" placeholder - that's expected, not a bug.
 
 **5. Stream - announcements**
 
@@ -139,9 +139,38 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 - As the teacher, confirm you see a delete icon on _every_ comment in the classroom, including students' - deleting one shows a toast and removes it instantly.
 - Comments display oldest-first, growing downward like a conversation thread.
 
-**7. Responsive check**
+**7. Classwork - topics**
 
-- Repeat steps 3-6 with the browser narrowed to a phone-sized viewport (or DevTools device mode) - the drawer nav, dialogs, and comment threads should all remain usable.
+- As the teacher, open the **Classwork** tab and use **+ Create → Topic** to add one or two topics.
+- Rename a topic inline, then drag-and-drop to reorder them - the order persists across a page refresh.
+- Delete a topic - a confirmation dialog appears first.
+- As the student, confirm the Classwork tab shows the same topics with no **+ Create** button and no rename/reorder/delete controls anywhere.
+
+**8. Classwork - materials**
+
+- As the teacher, use **+ Create → Material** and try each input type: a description-only note, a link (a YouTube/Vimeo URL is categorized as video, any other URL as a link), and a file attachment.
+- Assign a material to a topic, and leave another unassigned - the unassigned one renders under a "General" group.
+- Edit and delete a material - both work as expected, with a confirmation on delete.
+- As the student, materials are visible but read-only (no edit/delete controls). Note that file attachments currently record metadata only (name/size/type) - actual file storage isn't wired up yet, and the UI says so explicitly.
+
+**9. Classwork - assignments**
+
+- As the teacher, use **+ Create → Assignment**, fill in title/instructions/due date/points/topic/attachments, and click **Save draft** - it appears in the list with a **Draft** badge, visible only to you.
+- As the student, confirm the draft assignment does not appear in the Classwork list at all.
+- Back as the teacher, open the assignment's management menu and **Publish** it - the student now sees it (no badge).
+- Try **Close assignment**, **Edit**, and **Delete** from the same menu - each works with the expected confirmation/toast behavior.
+- As the student, confirm no management menu appears on any assignment card.
+
+**10. Classwork - assignment detail page**
+
+- Click an assignment's title (as either role) to open its dedicated detail page.
+- Confirm it shows the full instructions (untruncated), due date, points, and attachments, reusing the same management menu for teachers.
+- Confirm the side panel: teachers see "0 of N students submitted" (N = actual enrolled student count), students see a "Not submitted" badge - both note that turning in work isn't available yet (submissions are a future phase, not a bug).
+- As the student, try navigating directly to a **draft** assignment's detail URL - you should get a clean "Assignment not found" page, not the real content.
+
+**11. Responsive check**
+
+- Repeat steps 3-10 with the browser narrowed to a phone-sized viewport (or DevTools device mode) - the drawer nav, dialogs, and comment threads should all remain usable.
 
 ## Docker Setup
 
@@ -178,7 +207,7 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 - `src/components/page`: page-composition scaffolding - page container, section header, dashboard/stat grids.
 - `src/components/states`: shared empty/error/loading-skeleton components.
 - `src/components/layouts`: the pre-auth marketing shell used by the public landing page.
-- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `components/`, `hooks/`, `types/`. Currently: `classroom`, `stream` (`stream` uses `queries/` instead of a read-side action, since its reads are plain server-only functions, not client-invokable Server Actions).
+- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Currently: `classroom`, `stream`, `classwork` (topics, materials, assignments, and the assignment detail page all live here).
 - `src/auth`: Auth.js configuration (`index.ts`) and the server-side session helper (`session.ts`).
 - `src/lib`: shared utilities, including `lib/auth/permissions.ts` (role/ownership authorization helpers) and `lib/prisma.ts` (Prisma client singleton).
 - `src/generated/prisma`: generated Prisma client - do not edit.
@@ -216,18 +245,24 @@ Recommended branches:
 
 ## Implemented So Far
 
-- Authentication: Auth.js credentials provider, JWT sessions, Prisma adapter, `/login` form, protected-route middleware.
-- Application shell: responsive header, collapsible desktop sidebar, mobile drawer navigation, breadcrumbs, user/notifications menus, page-composition primitives, empty/loading/error states.
-- Classroom module: create/edit/archive a classroom (Teacher/Admin), join/leave by class code (any authenticated user), classroom list ("My Classrooms" cards), classroom detail shell with Stream/Classwork/People tab navigation.
-- Stream module: announcements (create/edit/delete/pin/unpin, Teacher/Admin only, students read-only), pinned-first ordering, comments on announcements (create by any member, delete own, teacher/manager can delete any) with optimistic UI, confirmation dialogs on destructive actions, toast notifications throughout. All of it authorized server-side, not just hidden in the UI.
+- **Authentication**: Auth.js credentials provider, JWT sessions, Prisma adapter, `/login` form, protected-route middleware.
+- **Application shell**: responsive header, collapsible desktop sidebar, mobile drawer navigation, breadcrumbs, user/notifications menus, page-composition primitives, empty/loading/error states.
+- **Classroom module**: create/edit/archive a classroom (Teacher/Admin), join/leave by class code (any authenticated user), classroom list ("My Classrooms" cards), classroom detail shell with Stream/Classwork/People tab navigation.
+- **Stream module**: announcements (create/edit/delete/pin/unpin, Teacher/Admin only, students read-only), pinned-first ordering, comments on announcements (create by any member, delete own, teacher/manager can delete any) with optimistic UI, confirmation dialogs on destructive actions, toast notifications throughout.
+- **Classwork module**:
+  - _Topics_: create, rename, delete, and drag-and-drop reorder (Teacher/Admin only; students read-only).
+  - _Materials_: metadata-only uploads, link/URL materials (auto-typed as video/link), file attachments, optional topic assignment.
+  - _Assignments_: create/edit/delete with title, instructions, due date, points, topic, and attachments; a draft → published → closed lifecycle where drafts are invisible to students, not just visually hidden.
+  - _Assignment detail page_: a dedicated page per assignment reusing the shared management menu, attachment list, and due-date formatting; shows a submission-status summary (real enrolled-student counts, no fake submission data) while actual submissions/grading remain a future phase.
+
+  All of the above is authorized server-side (Server Actions + service-layer checks), not just hidden in the UI.
 
 ## Future Modules
 
 Planned modules include:
 
-- Classwork (topics, assignments, materials)
 - People (roster, invitations)
-- Assignment detail and submissions/grading
+- Submissions and grading (students turning in work, teachers reviewing/scoring it)
 - Notifications (real data, currently UI-only)
 - Search (real data, currently UI-only)
 - Admin area (users, classrooms, reports)

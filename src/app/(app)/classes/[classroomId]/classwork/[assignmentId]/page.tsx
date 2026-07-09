@@ -10,6 +10,8 @@ import { SubmissionStatusPanel } from "@/features/classwork/components/submissio
 import { formatDueDate } from "@/features/classwork/lib/format-assignment";
 import { getAssignmentDetail } from "@/features/classwork/queries/assignment-queries";
 import { listTopicsForClassroom } from "@/features/classwork/queries/topic-queries";
+import { SubmissionPanel } from "@/features/submissions/components/submission-panel";
+import { getStudentSubmission } from "@/features/submissions/queries/submission-queries";
 
 export default async function AssignmentDetailPage({
   params,
@@ -28,6 +30,20 @@ export default async function AssignmentDetailPage({
   }
 
   const dueDateLabel = formatDueDate(assignment.dueDate);
+
+  const submissionPanel = assignment.canManage ? (
+    <SubmissionStatusPanel
+      canManage={assignment.canManage}
+      studentCount={assignment.studentCount}
+    />
+  ) : (
+    <SubmissionPanel
+      classroomId={classroomId}
+      assignmentId={assignmentId}
+      dueDate={assignment.dueDate}
+      initialView={await getStudentSubmission(assignmentId)}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -94,12 +110,7 @@ export default async function AssignmentDetailPage({
           </Card>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <SubmissionStatusPanel
-            canManage={assignment.canManage}
-            studentCount={assignment.studentCount}
-          />
-        </div>
+        <div className="flex flex-col gap-4">{submissionPanel}</div>
       </div>
     </div>
   );
