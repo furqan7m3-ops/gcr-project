@@ -13,10 +13,14 @@ interface RosterSectionProps {
 }
 
 export function RosterSection({ title, members, emptyMessage, renderAction }: RosterSectionProps) {
+  const headingId = `roster-section-${title.toLowerCase().replace(/\s+/g, "-")}`;
+
   return (
-    <section className="flex flex-col gap-2">
+    <section aria-labelledby={headingId} className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        <h2 id={headingId} className="text-sm font-semibold text-foreground">
+          {title}
+        </h2>
         <span className="text-xs text-muted-foreground">{members.length}</span>
       </div>
       <Card>

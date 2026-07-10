@@ -13,6 +13,14 @@ export default function PeopleLoading() {
         <Skeleton className="h-16 w-full rounded-xl" />
       </div>
 
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Skeleton className="h-10 flex-1" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-10 w-40" />
+          <Skeleton className="h-10 w-10 shrink-0" />
+        </div>
+      </div>
+
       {[0, 1].map((section) => (
         <div key={section} className="flex flex-col gap-2">
           <Skeleton className="h-4 w-20" />

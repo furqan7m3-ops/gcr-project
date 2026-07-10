@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
@@ -14,8 +14,15 @@ import {
   removeMemberAction,
 } from "../actions/classroom-mutations";
 import { canManageClassroom } from "../lib/can-manage";
+import {
+  filterMembers,
+  sortMembers,
+  type MemberSortKey,
+  type SortDirection,
+} from "../lib/roster-search-sort";
 import type { ClassroomMembershipRole, ClassroomMemberSummary, ClassroomRoster } from "../types";
 import { MemberActionsMenu } from "./member-actions-menu";
+import { RosterControls } from "./roster-controls";
 import { RosterSection } from "./roster-section";
 
 type RosterOptimisticAction =
@@ -97,8 +104,21 @@ export function RosterManager({
   const [isChangingRole, startRoleChangeTransition] = useTransition();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [isLeaving, startLeaveTransition] = useTransition();
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<MemberSortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDirection>("asc");
 
   const isViewerOwner = viewerId === ownerId;
+  const isSearching = search.trim().length > 0;
+
+  const visibleTeachers = useMemo(
+    () => sortMembers(filterMembers(optimisticRoster.teachers, search), sortKey, sortDir),
+    [optimisticRoster.teachers, search, sortKey, sortDir],
+  );
+  const visibleStudents = useMemo(
+    () => sortMembers(filterMembers(optimisticRoster.students, search), sortKey, sortDir),
+    [optimisticRoster.students, search, sortKey, sortDir],
+  );
 
   function handleRemoveConfirm() {
     const target = removeTarget;
@@ -190,16 +210,27 @@ export function RosterManager({
 
   return (
     <>
+      <RosterControls
+        search={search}
+        onSearchChange={setSearch}
+        sortKey={sortKey}
+        onSortKeyChange={setSortKey}
+        sortDir={sortDir}
+        onToggleSortDir={() => setSortDir((previous) => (previous === "asc" ? "desc" : "asc"))}
+      />
+
       <RosterSection
         title="Teachers"
-        members={optimisticRoster.teachers}
-        emptyMessage="No teachers found."
+        members={visibleTeachers}
+        emptyMessage={isSearching ? "No teachers match your search." : "No teachers found."}
         renderAction={renderMemberActions}
       />
       <RosterSection
         title="Students"
-        members={optimisticRoster.students}
-        emptyMessage="No students have joined this class yet."
+        members={visibleStudents}
+        emptyMessage={
+          isSearching ? "No students match your search." : "No students have joined this class yet."
+        }
         renderAction={renderMemberActions}
       />
 

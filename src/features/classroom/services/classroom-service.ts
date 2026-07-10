@@ -57,6 +57,23 @@ function isUniqueCodeConflict(error: unknown): boolean {
 }
 
 /**
+ * Shared "does this classroom exist at all" check, reused by every mutation in
+ * this feature (and by invitation-service) instead of each re-implementing the
+ * same fetch + NOT_FOUND guard. Archived-state handling is deliberately left to
+ * callers, since each one needs a different message for it (or, like removing/
+ * leaving a member, doesn't block on it at all).
+ */
+export async function loadActiveClassroom(classroomId: string) {
+  const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
+
+  if (!classroom || classroom.status === ClassroomStatus.DELETED) {
+    throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
+  }
+
+  return classroom;
+}
+
+/**
  * Only OWNER/TEACHER/CO_TEACHER on this specific classroom (or a platform ADMIN) may
  * manage it - a global TEACHER role does not imply access to every classroom.
  */
@@ -236,40 +253,32 @@ export async function updateClassroom(
   user: SessionUser,
   input: Omit<UpdateClassroomInput, "classroomId">,
 ): Promise<ClassroomSummary> {
-  const existing = await prisma.classroom.findUnique({ where: { id: classroomId } });
-
-  if (!existing || existing.status === ClassroomStatus.DELETED) {
-    throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
-  }
-
+  await loadActiveClassroom(classroomId);
   await assertManagementAccess(classroomId, user);
 
-  const updated = await prisma.classroom.update({
-    where: { id: classroomId },
-    data: {
-      title: input.title,
-      section: input.section ?? null,
-      subject: input.subject ?? null,
-      room: input.room ?? null,
-      description: input.description ?? null,
-    },
-    include: classroomWithOwnerInclude(),
-  });
-
-  const membership = await prisma.classroomMembership.findUnique({
-    where: { classroomId_userId: { classroomId, userId: user.id } },
-  });
+  // Neither read depends on the other's result, so run them concurrently.
+  const [updated, membership] = await Promise.all([
+    prisma.classroom.update({
+      where: { id: classroomId },
+      data: {
+        title: input.title,
+        section: input.section ?? null,
+        subject: input.subject ?? null,
+        room: input.room ?? null,
+        description: input.description ?? null,
+      },
+      include: classroomWithOwnerInclude(),
+    }),
+    prisma.classroomMembership.findUnique({
+      where: { classroomId_userId: { classroomId, userId: user.id } },
+    }),
+  ]);
 
   return toClassroomSummary(updated, membership?.role ?? ClassroomMembershipRole.TEACHER);
 }
 
 export async function archiveClassroom(classroomId: string, user: SessionUser): Promise<void> {
-  const existing = await prisma.classroom.findUnique({ where: { id: classroomId } });
-
-  if (!existing || existing.status === ClassroomStatus.DELETED) {
-    throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
-  }
-
+  await loadActiveClassroom(classroomId);
   await assertManagementAccess(classroomId, user);
 
   await prisma.classroom.update({
@@ -357,15 +366,18 @@ export async function removeMember(
   targetUserId: string,
   actor: SessionUser,
 ): Promise<void> {
-  await assertManagementAccess(classroomId, actor);
-
   if (targetUserId === actor.id) {
     throw new ClassroomServiceError("VALIDATION_ERROR", 'Use "Leave class" to remove yourself.');
   }
 
-  const membership = await prisma.classroomMembership.findUnique({
-    where: { classroomId_userId: { classroomId, userId: targetUserId } },
-  });
+  // Independent reads - the authorization check doesn't depend on the target's
+  // membership row, so fetch both concurrently instead of one after the other.
+  const [, membership] = await Promise.all([
+    assertManagementAccess(classroomId, actor),
+    prisma.classroomMembership.findUnique({
+      where: { classroomId_userId: { classroomId, userId: targetUserId } },
+    }),
+  ]);
 
   if (!membership || membership.status !== ClassroomMembershipStatus.ACTIVE) {
     throw new ClassroomServiceError(
@@ -425,11 +437,18 @@ export async function changeMemberRole(
   newRole: ClassroomMembershipRole,
   actor: SessionUser,
 ): Promise<void> {
-  const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
-
-  if (!classroom || classroom.status === ClassroomStatus.DELETED) {
-    throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
+  if (targetUserId === actor.id) {
+    throw new ClassroomServiceError("VALIDATION_ERROR", "You can't change your own role here.");
   }
+
+  // Independent reads - fetch the classroom and the target's membership
+  // concurrently rather than one after the other.
+  const [classroom, membership] = await Promise.all([
+    loadActiveClassroom(classroomId),
+    prisma.classroomMembership.findUnique({
+      where: { classroomId_userId: { classroomId, userId: targetUserId } },
+    }),
+  ]);
 
   if (classroom.status === ClassroomStatus.ARCHIVED) {
     throw new ClassroomServiceError(
@@ -439,14 +458,6 @@ export async function changeMemberRole(
   }
 
   await assertManagementAccess(classroomId, actor);
-
-  if (targetUserId === actor.id) {
-    throw new ClassroomServiceError("VALIDATION_ERROR", "You can't change your own role here.");
-  }
-
-  const membership = await prisma.classroomMembership.findUnique({
-    where: { classroomId_userId: { classroomId, userId: targetUserId } },
-  });
 
   if (!membership || membership.status !== ClassroomMembershipStatus.ACTIVE) {
     throw new ClassroomServiceError(

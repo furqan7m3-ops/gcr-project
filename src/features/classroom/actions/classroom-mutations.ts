@@ -2,10 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { AuthError, requireRole, requireUser } from "@/lib/auth/permissions";
+import { requireRole, requireUser } from "@/lib/auth/permissions";
 import { UserRole } from "@/generated/prisma/enums";
 
-import { ClassroomServiceError } from "../lib/errors";
 import * as classroomService from "../services/classroom-service";
 import type { ActionResult, ClassroomSummary } from "../types";
 import {
@@ -14,23 +13,7 @@ import {
   updateClassroomSchema,
 } from "../validation/classroom-schema";
 import { changeMemberRoleSchema, removeMemberSchema } from "../validation/member-schema";
-
-function formDataToObject(formData: FormData): Record<string, string> {
-  return Object.fromEntries(formData.entries()) as Record<string, string>;
-}
-
-function toErrorResult<T>(error: unknown, fallbackMessage: string): ActionResult<T> {
-  if (error instanceof AuthError) {
-    return { status: "error", message: error.message };
-  }
-
-  if (error instanceof ClassroomServiceError) {
-    return { status: "error", message: error.message };
-  }
-
-  console.error(error);
-  return { status: "error", message: fallbackMessage };
-}
+import { formDataToObject, toErrorResult } from "./shared";
 
 export async function createClassroomAction(
   _prevState: ActionResult<ClassroomSummary> | null,

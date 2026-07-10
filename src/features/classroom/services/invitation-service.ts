@@ -7,7 +7,7 @@ import {
   InvitationType,
 } from "@/generated/prisma/enums";
 
-import { assertManagementAccess } from "./classroom-service";
+import { assertManagementAccess, loadActiveClassroom } from "./classroom-service";
 import { ClassroomServiceError } from "../lib/errors";
 import type { PendingInvitation } from "../types";
 
@@ -30,11 +30,7 @@ function toPendingInvitation(invitation: {
 }
 
 async function assertClassroomAcceptsInvitations(classroomId: string): Promise<void> {
-  const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
-
-  if (!classroom || classroom.status === ClassroomStatus.DELETED) {
-    throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
-  }
+  const classroom = await loadActiveClassroom(classroomId);
 
   if (classroom.status === ClassroomStatus.ARCHIVED) {
     throw new ClassroomServiceError(
@@ -67,7 +63,21 @@ export async function inviteMember(
   await assertClassroomAcceptsInvitations(classroomId);
   await assertManagementAccess(classroomId, user);
 
-  const existingUser = await prisma.user.findUnique({ where: { email } });
+  // Independent reads - whether this email already belongs to a user and
+  // whether it already has a pending invitation don't depend on each other.
+  const [existingUser, existingInvitation] = await Promise.all([
+    prisma.user.findUnique({ where: { email } }),
+    prisma.invitation.findFirst({
+      where: { classroomId, inviteeEmail: email, status: InvitationStatus.PENDING },
+    }),
+  ]);
+
+  if (existingInvitation) {
+    throw new ClassroomServiceError(
+      "VALIDATION_ERROR",
+      "An invitation is already pending for this email.",
+    );
+  }
 
   if (existingUser) {
     const membership = await prisma.classroomMembership.findUnique({
@@ -80,17 +90,6 @@ export async function inviteMember(
         "This person is already a member of this class.",
       );
     }
-  }
-
-  const existingInvitation = await prisma.invitation.findFirst({
-    where: { classroomId, inviteeEmail: email, status: InvitationStatus.PENDING },
-  });
-
-  if (existingInvitation) {
-    throw new ClassroomServiceError(
-      "VALIDATION_ERROR",
-      "An invitation is already pending for this email.",
-    );
   }
 
   const created = await prisma.invitation.create({

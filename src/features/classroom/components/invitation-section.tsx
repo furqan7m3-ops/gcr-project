@@ -28,14 +28,14 @@ export function InvitationSection({ classroomId, initialInvitations }: Invitatio
   }
 
   return (
-    <section className="flex flex-col gap-2">
+    <section aria-labelledby="invitations-heading" className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">
+        <h2 id="invitations-heading" className="text-sm font-semibold text-foreground">
           Pending invitations
           <span className="ml-1.5 font-normal text-muted-foreground">{invitations.length}</span>
         </h2>
         <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <UserPlus /> Invite
+          <UserPlus aria-hidden /> Invite
         </Button>
       </div>
 
