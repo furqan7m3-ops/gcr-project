@@ -347,3 +347,64 @@ export async function leaveClassroom(userId: string, classroomId: string): Promi
     data: { status: ClassroomMembershipStatus.REMOVED },
   });
 }
+
+/**
+ * Teacher-initiated removal of another member (student or co-teacher). Distinct
+ * from leaveClassroom, which is self-service and has no management gate.
+ */
+export async function removeMember(
+  classroomId: string,
+  targetUserId: string,
+  actor: SessionUser,
+): Promise<void> {
+  await assertManagementAccess(classroomId, actor);
+
+  if (targetUserId === actor.id) {
+    throw new ClassroomServiceError("VALIDATION_ERROR", 'Use "Leave class" to remove yourself.');
+  }
+
+  const membership = await prisma.classroomMembership.findUnique({
+    where: { classroomId_userId: { classroomId, userId: targetUserId } },
+  });
+
+  if (!membership || membership.status !== ClassroomMembershipStatus.ACTIVE) {
+    throw new ClassroomServiceError(
+      "NOT_A_MEMBER",
+      "This person is not an active member of this class.",
+    );
+  }
+
+  if (membership.role === ClassroomMembershipRole.OWNER) {
+    throw new ClassroomServiceError("CANNOT_REMOVE_OWNER", "The classroom owner can't be removed.");
+  }
+
+  // Belt-and-suspenders on top of the owner check above: a classroom must
+  // always retain at least one member who can manage it.
+  if (canManageClassroom(membership.role)) {
+    const managerCount = await prisma.classroomMembership.count({
+      where: {
+        classroomId,
+        status: ClassroomMembershipStatus.ACTIVE,
+        role: {
+          in: [
+            ClassroomMembershipRole.OWNER,
+            ClassroomMembershipRole.TEACHER,
+            ClassroomMembershipRole.CO_TEACHER,
+          ],
+        },
+      },
+    });
+
+    if (managerCount <= 1) {
+      throw new ClassroomServiceError(
+        "CANNOT_REMOVE_LAST_TEACHER",
+        "Every class needs at least one teacher - you can't remove the last one.",
+      );
+    }
+  }
+
+  await prisma.classroomMembership.update({
+    where: { id: membership.id },
+    data: { status: ClassroomMembershipStatus.REMOVED },
+  });
+}

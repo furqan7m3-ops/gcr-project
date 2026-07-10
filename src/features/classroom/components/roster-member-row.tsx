@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { getInitials } from "@/lib/utils";
@@ -18,9 +20,10 @@ function formatJoinedDate(date: Date): string {
 
 interface RosterMemberRowProps {
   member: ClassroomMemberSummary;
+  action?: ReactNode;
 }
 
-export function RosterMemberRow({ member }: RosterMemberRowProps) {
+export function RosterMemberRow({ member, action }: RosterMemberRowProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
       <Avatar className="h-9 w-9 shrink-0">
@@ -35,6 +38,7 @@ export function RosterMemberRow({ member }: RosterMemberRowProps) {
       <span className="text-xs text-muted-foreground">
         Joined {formatJoinedDate(member.joinedAt)}
       </span>
+      {action}
     </div>
   );
 }

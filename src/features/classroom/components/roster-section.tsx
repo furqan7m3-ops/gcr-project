@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { Card } from "@/components/ui/card";
 
 import type { ClassroomMemberSummary } from "../types";
@@ -7,9 +9,10 @@ interface RosterSectionProps {
   title: string;
   members: ClassroomMemberSummary[];
   emptyMessage: string;
+  renderAction?: (member: ClassroomMemberSummary) => ReactNode;
 }
 
-export function RosterSection({ title, members, emptyMessage }: RosterSectionProps) {
+export function RosterSection({ title, members, emptyMessage, renderAction }: RosterSectionProps) {
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
@@ -22,7 +25,7 @@ export function RosterSection({ title, members, emptyMessage }: RosterSectionPro
         ) : (
           <div className="flex flex-col divide-y divide-border">
             {members.map((member) => (
-              <RosterMemberRow key={member.id} member={member} />
+              <RosterMemberRow key={member.id} member={member} action={renderAction?.(member)} />
             ))}
           </div>
         )}

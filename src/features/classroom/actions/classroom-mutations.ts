@@ -13,6 +13,7 @@ import {
   joinClassroomSchema,
   updateClassroomSchema,
 } from "../validation/classroom-schema";
+import { removeMemberSchema } from "../validation/member-schema";
 
 function formDataToObject(formData: FormData): Record<string, string> {
   return Object.fromEntries(formData.entries()) as Record<string, string>;
@@ -132,9 +133,31 @@ export async function leaveClassroomAction(classroomId: string): Promise<ActionR
     await classroomService.leaveClassroom(user.id, classroomId);
 
     revalidatePath("/classes");
+    revalidatePath(`/classes/${classroomId}`);
 
     return { status: "success", data: undefined };
   } catch (error) {
     return toErrorResult(error, "Couldn't leave the class. Please try again.");
+  }
+}
+
+export async function removeMemberAction(
+  classroomId: string,
+  userId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const actor = await requireUser();
+
+    const parsed = removeMemberSchema.safeParse({ classroomId, userId });
+    if (!parsed.success) {
+      return { status: "error", message: "Invalid member." };
+    }
+
+    await classroomService.removeMember(parsed.data.classroomId, parsed.data.userId, actor);
+    revalidatePath(`/classes/${classroomId}/people`);
+
+    return { status: "success", data: undefined };
+  } catch (error) {
+    return toErrorResult(error, "Couldn't remove this member. Please try again.");
   }
 }

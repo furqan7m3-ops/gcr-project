@@ -2,15 +2,16 @@ import { notFound } from "next/navigation";
 
 import { getClassroomByIdAction } from "@/features/classroom/actions/classroom-queries";
 import { InvitationSection } from "@/features/classroom/components/invitation-section";
-import { RosterSection } from "@/features/classroom/components/roster-section";
+import { RosterManager } from "@/features/classroom/components/roster-manager";
 import { canManageClassroom } from "@/features/classroom/lib/can-manage";
 import { getPendingInvitations } from "@/features/classroom/queries/invitation-queries";
 import { getClassroomRoster } from "@/features/classroom/queries/roster-queries";
+import { requireUser } from "@/lib/auth/permissions";
 
 export default async function PeoplePage({ params }: { params: Promise<{ classroomId: string }> }) {
   const { classroomId } = await params;
 
-  const classroom = await getClassroomByIdAction(classroomId);
+  const [classroom, user] = await Promise.all([getClassroomByIdAction(classroomId), requireUser()]);
 
   if (!classroom) {
     notFound();
@@ -41,11 +42,12 @@ export default async function PeoplePage({ params }: { params: Promise<{ classro
         <InvitationSection classroomId={classroomId} initialInvitations={invitations ?? []} />
       ) : null}
 
-      <RosterSection title="Teachers" members={roster.teachers} emptyMessage="No teachers found." />
-      <RosterSection
-        title="Students"
-        members={roster.students}
-        emptyMessage="No students have joined this class yet."
+      <RosterManager
+        classroomId={classroomId}
+        classroomTitle={classroom.title}
+        initialRoster={roster}
+        viewerId={user.id}
+        canManage={canManage}
       />
     </div>
   );
