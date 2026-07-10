@@ -33,3 +33,10 @@ export interface ClassroomRoster {
   teachers: ClassroomMemberSummary[];
   students: ClassroomMemberSummary[];
 }
+
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  invitedByName: string;
+  createdAt: Date;
+}
