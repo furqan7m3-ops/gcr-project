@@ -1,6 +1,7 @@
 import type { ClassroomMembershipRole, ClassroomStatus } from "@/generated/prisma/enums";
 
 export type { ActionResult } from "@/types/action-result";
+export type { ClassroomMembershipRole } from "@/generated/prisma/enums";
 
 export interface ClassroomSummary {
   id: string;
@@ -17,4 +18,18 @@ export interface ClassroomSummary {
   /** The current viewer's membership role for this classroom. */
   role: ClassroomMembershipRole;
   createdAt: Date;
+}
+
+export interface ClassroomMemberSummary {
+  id: string;
+  name: string;
+  email: string;
+  image: string | null;
+  role: ClassroomMembershipRole;
+  joinedAt: Date;
+}
+
+export interface ClassroomRoster {
+  teachers: ClassroomMemberSummary[];
+  students: ClassroomMemberSummary[];
 }

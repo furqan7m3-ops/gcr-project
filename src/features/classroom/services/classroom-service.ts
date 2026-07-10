@@ -12,7 +12,7 @@ import { canManageClassroom } from "../lib/can-manage";
 import { generateClassroomCode } from "../lib/generate-code";
 import { ClassroomServiceError } from "../lib/errors";
 import type { CreateClassroomInput, UpdateClassroomInput } from "../validation/classroom-schema";
-import type { ClassroomSummary } from "../types";
+import type { ClassroomMemberSummary, ClassroomRoster, ClassroomSummary } from "../types";
 
 const MAX_CODE_ATTEMPTS = 5;
 
@@ -102,6 +102,44 @@ export async function assertMembership(classroomId: string, user: SessionUser): 
   if (!membership || membership.status !== ClassroomMembershipStatus.ACTIVE) {
     throw new ClassroomServiceError("FORBIDDEN", "You are not a member of this classroom.");
   }
+}
+
+/** Read-only roster: any active member (any role) may view it - same gate as the page itself. */
+export async function getClassroomRoster(
+  classroomId: string,
+  user: SessionUser,
+): Promise<ClassroomRoster> {
+  await assertMembership(classroomId, user);
+
+  const memberships = await prisma.classroomMembership.findMany({
+    where: { classroomId, status: ClassroomMembershipStatus.ACTIVE },
+    include: {
+      user: { select: { id: true, name: true, email: true, image: true, avatarUrl: true } },
+    },
+    orderBy: { user: { name: "asc" } },
+  });
+
+  const teachers: ClassroomMemberSummary[] = [];
+  const students: ClassroomMemberSummary[] = [];
+
+  for (const membership of memberships) {
+    const summary: ClassroomMemberSummary = {
+      id: membership.user.id,
+      name: membership.user.name,
+      email: membership.user.email,
+      image: membership.user.image ?? membership.user.avatarUrl ?? null,
+      role: membership.role,
+      joinedAt: membership.joinedAt,
+    };
+
+    if (canManageClassroom(membership.role)) {
+      teachers.push(summary);
+    } else {
+      students.push(summary);
+    }
+  }
+
+  return { teachers, students };
 }
 
 export async function listUserClassrooms(userId: string): Promise<ClassroomSummary[]> {
