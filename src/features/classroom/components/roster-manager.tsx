@@ -2,28 +2,80 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, UserMinus } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
-import { leaveClassroomAction, removeMemberAction } from "../actions/classroom-mutations";
-import type { ClassroomMemberSummary, ClassroomRoster } from "../types";
+import {
+  changeMemberRoleAction,
+  leaveClassroomAction,
+  removeMemberAction,
+} from "../actions/classroom-mutations";
+import { canManageClassroom } from "../lib/can-manage";
+import type { ClassroomMembershipRole, ClassroomMemberSummary, ClassroomRoster } from "../types";
+import { MemberActionsMenu } from "./member-actions-menu";
 import { RosterSection } from "./roster-section";
 
-type RosterOptimisticAction = { type: "remove"; userId: string };
+type RosterOptimisticAction =
+  | { type: "remove"; userId: string }
+  | { type: "changeRole"; userId: string; role: ClassroomMembershipRole };
+
+function rebucket(members: ClassroomMemberSummary[]): ClassroomRoster {
+  return {
+    teachers: members.filter((member) => canManageClassroom(member.role)),
+    students: members.filter((member) => !canManageClassroom(member.role)),
+  };
+}
 
 function rosterReducer(state: ClassroomRoster, action: RosterOptimisticAction): ClassroomRoster {
+  const allMembers = [...state.teachers, ...state.students];
+
+  if (action.type === "remove") {
+    return rebucket(allMembers.filter((member) => member.id !== action.userId));
+  }
+
+  return rebucket(
+    allMembers.map((member) =>
+      member.id === action.userId ? { ...member, role: action.role } : member,
+    ),
+  );
+}
+
+interface RoleChangeTarget {
+  member: ClassroomMemberSummary;
+  newRole: ClassroomMembershipRole;
+}
+
+function roleChangeCopy(target: RoleChangeTarget, classroomTitle: string) {
+  if (target.newRole === "OWNER") {
+    return {
+      title: `Transfer ownership to ${target.member.name}?`,
+      description: `${target.member.name} will become the owner of ${classroomTitle}, and you'll become a teacher. Only the new owner will be able to transfer it again.`,
+      destructive: true,
+    };
+  }
+
+  if (target.newRole === "CO_TEACHER") {
+    return {
+      title: `Make ${target.member.name} a co-teacher?`,
+      description: `${target.member.name} will be able to manage ${classroomTitle}, including classwork, the roster, and grades.`,
+      destructive: false,
+    };
+  }
+
   return {
-    teachers: state.teachers.filter((member) => member.id !== action.userId),
-    students: state.students.filter((member) => member.id !== action.userId),
+    title: `Remove ${target.member.name} as co-teacher?`,
+    description: `${target.member.name} will become a student and lose management access to ${classroomTitle}.`,
+    destructive: true,
   };
 }
 
 interface RosterManagerProps {
   classroomId: string;
   classroomTitle: string;
+  ownerId: string;
   initialRoster: ClassroomRoster;
   viewerId: string;
   canManage: boolean;
@@ -32,6 +84,7 @@ interface RosterManagerProps {
 export function RosterManager({
   classroomId,
   classroomTitle,
+  ownerId,
   initialRoster,
   viewerId,
   canManage,
@@ -40,8 +93,12 @@ export function RosterManager({
   const [optimisticRoster, applyOptimistic] = useOptimistic(initialRoster, rosterReducer);
   const [removeTarget, setRemoveTarget] = useState<ClassroomMemberSummary | null>(null);
   const [isRemoving, startRemoveTransition] = useTransition();
+  const [roleChangeTarget, setRoleChangeTarget] = useState<RoleChangeTarget | null>(null);
+  const [isChangingRole, startRoleChangeTransition] = useTransition();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [isLeaving, startLeaveTransition] = useTransition();
+
+  const isViewerOwner = viewerId === ownerId;
 
   function handleRemoveConfirm() {
     const target = removeTarget;
@@ -68,6 +125,36 @@ export function RosterManager({
     });
   }
 
+  function handleRoleChangeConfirm() {
+    const target = roleChangeTarget;
+    if (!target) {
+      return;
+    }
+
+    startRoleChangeTransition(async () => {
+      applyOptimistic({ type: "changeRole", userId: target.member.id, role: target.newRole });
+      if (target.newRole === "OWNER") {
+        // Ownership transfer swaps two roles at once - reflect both immediately.
+        applyOptimistic({ type: "changeRole", userId: viewerId, role: "TEACHER" });
+      }
+
+      const result = await changeMemberRoleAction(classroomId, target.member.id, target.newRole);
+
+      if (result.status === "success") {
+        toast.success(
+          target.newRole === "OWNER"
+            ? `Ownership transferred to ${target.member.name}`
+            : `${target.member.name}'s role updated`,
+        );
+        setRoleChangeTarget(null);
+      } else {
+        toast.error(result.message);
+      }
+
+      router.refresh();
+    });
+  }
+
   function handleLeaveConfirm() {
     startLeaveTransition(async () => {
       const result = await leaveClassroomAction(classroomId);
@@ -82,23 +169,24 @@ export function RosterManager({
     });
   }
 
-  function renderRemoveAction(member: ClassroomMemberSummary) {
+  function renderMemberActions(member: ClassroomMemberSummary) {
     if (!canManage || member.role === "OWNER" || member.id === viewerId) {
       return null;
     }
 
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="text-destructive hover:text-destructive"
-        onClick={() => setRemoveTarget(member)}
-      >
-        <UserMinus /> Remove
-      </Button>
+      <MemberActionsMenu
+        member={member}
+        isViewerOwner={isViewerOwner}
+        onChangeRole={(target, newRole) => setRoleChangeTarget({ member: target, newRole })}
+        onRemove={setRemoveTarget}
+      />
     );
   }
+
+  const roleChangeDetails = roleChangeTarget
+    ? roleChangeCopy(roleChangeTarget, classroomTitle)
+    : null;
 
   return (
     <>
@@ -106,13 +194,13 @@ export function RosterManager({
         title="Teachers"
         members={optimisticRoster.teachers}
         emptyMessage="No teachers found."
-        renderAction={renderRemoveAction}
+        renderAction={renderMemberActions}
       />
       <RosterSection
         title="Students"
         members={optimisticRoster.students}
         emptyMessage="No students have joined this class yet."
-        renderAction={renderRemoveAction}
+        renderAction={renderMemberActions}
       />
 
       {!canManage ? (
@@ -139,6 +227,21 @@ export function RosterManager({
         destructive
         pending={isRemoving}
         onConfirm={handleRemoveConfirm}
+      />
+
+      <ConfirmDialog
+        open={roleChangeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRoleChangeTarget(null);
+          }
+        }}
+        title={roleChangeDetails?.title ?? "Change this member's role?"}
+        description={roleChangeDetails?.description ?? ""}
+        confirmLabel={roleChangeTarget?.newRole === "OWNER" ? "Transfer ownership" : "Confirm"}
+        destructive={roleChangeDetails?.destructive}
+        pending={isChangingRole}
+        onConfirm={handleRoleChangeConfirm}
       />
 
       <ConfirmDialog

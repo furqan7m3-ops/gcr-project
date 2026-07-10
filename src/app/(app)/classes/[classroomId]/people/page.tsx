@@ -45,6 +45,7 @@ export default async function PeoplePage({ params }: { params: Promise<{ classro
       <RosterManager
         classroomId={classroomId}
         classroomTitle={classroom.title}
+        ownerId={classroom.ownerId}
         initialRoster={roster}
         viewerId={user.id}
         canManage={canManage}

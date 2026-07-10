@@ -13,7 +13,7 @@ import {
   joinClassroomSchema,
   updateClassroomSchema,
 } from "../validation/classroom-schema";
-import { removeMemberSchema } from "../validation/member-schema";
+import { changeMemberRoleSchema, removeMemberSchema } from "../validation/member-schema";
 
 function formDataToObject(formData: FormData): Record<string, string> {
   return Object.fromEntries(formData.entries()) as Record<string, string>;
@@ -159,5 +159,33 @@ export async function removeMemberAction(
     return { status: "success", data: undefined };
   } catch (error) {
     return toErrorResult(error, "Couldn't remove this member. Please try again.");
+  }
+}
+
+export async function changeMemberRoleAction(
+  classroomId: string,
+  userId: string,
+  role: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const actor = await requireUser();
+
+    const parsed = changeMemberRoleSchema.safeParse({ classroomId, userId, role });
+    if (!parsed.success) {
+      return { status: "error", message: "Invalid role change." };
+    }
+
+    await classroomService.changeMemberRole(
+      parsed.data.classroomId,
+      parsed.data.userId,
+      parsed.data.role,
+      actor,
+    );
+    revalidatePath(`/classes/${classroomId}/people`);
+    revalidatePath(`/classes/${classroomId}`);
+
+    return { status: "success", data: undefined };
+  } catch (error) {
+    return toErrorResult(error, "Couldn't change this member's role. Please try again.");
   }
 }

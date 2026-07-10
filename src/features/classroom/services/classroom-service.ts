@@ -408,3 +408,128 @@ export async function removeMember(
     data: { status: ClassroomMembershipStatus.REMOVED },
   });
 }
+
+/**
+ * Changes a member's classroom role. Supports exactly three transitions:
+ *   STUDENT -> CO_TEACHER            (promote)
+ *   CO_TEACHER -> STUDENT            (demote)
+ *   TEACHER | CO_TEACHER -> OWNER    (ownership transfer, owner-only, atomic)
+ *
+ * The OWNER role is never assigned or removed any other way - there is no
+ * standalone "demote the owner" path, so an owner can only stop being owner
+ * by transferring ownership to someone else in the same operation.
+ */
+export async function changeMemberRole(
+  classroomId: string,
+  targetUserId: string,
+  newRole: ClassroomMembershipRole,
+  actor: SessionUser,
+): Promise<void> {
+  const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
+
+  if (!classroom || classroom.status === ClassroomStatus.DELETED) {
+    throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
+  }
+
+  if (classroom.status === ClassroomStatus.ARCHIVED) {
+    throw new ClassroomServiceError(
+      "ARCHIVED",
+      "This class is archived and roles can't be changed.",
+    );
+  }
+
+  await assertManagementAccess(classroomId, actor);
+
+  if (targetUserId === actor.id) {
+    throw new ClassroomServiceError("VALIDATION_ERROR", "You can't change your own role here.");
+  }
+
+  const membership = await prisma.classroomMembership.findUnique({
+    where: { classroomId_userId: { classroomId, userId: targetUserId } },
+  });
+
+  if (!membership || membership.status !== ClassroomMembershipStatus.ACTIVE) {
+    throw new ClassroomServiceError(
+      "NOT_A_MEMBER",
+      "This person is not an active member of this class.",
+    );
+  }
+
+  const currentRole = membership.role;
+
+  if (currentRole === newRole) {
+    throw new ClassroomServiceError("VALIDATION_ERROR", "This member already has that role.");
+  }
+
+  // The owner's role is untouchable through this generic path - see transfer
+  // handling below, which is the only legitimate way it ever changes.
+  if (currentRole === ClassroomMembershipRole.OWNER) {
+    throw new ClassroomServiceError(
+      "INVALID_ROLE_CHANGE",
+      "Transfer ownership instead of changing the owner's role directly.",
+    );
+  }
+
+  if (newRole === ClassroomMembershipRole.OWNER) {
+    // Only the current owner (or a platform admin) may transfer ownership -
+    // this is what makes "prevent multiple owners" and "owner can't demote
+    // themselves without transferring" both hold: it's the one and only path
+    // that ever assigns OWNER, and it always swaps the previous owner out atomically.
+    if (classroom.ownerId !== actor.id && actor.role !== UserRole.ADMIN) {
+      throw new ClassroomServiceError(
+        "FORBIDDEN",
+        "Only the current owner can transfer ownership.",
+      );
+    }
+
+    if (
+      currentRole !== ClassroomMembershipRole.TEACHER &&
+      currentRole !== ClassroomMembershipRole.CO_TEACHER
+    ) {
+      throw new ClassroomServiceError(
+        "INVALID_ROLE_CHANGE",
+        "Only an existing teacher or co-teacher can be promoted to owner.",
+      );
+    }
+
+    await prisma.$transaction([
+      prisma.classroom.update({ where: { id: classroomId }, data: { ownerId: targetUserId } }),
+      prisma.classroomMembership.update({
+        where: { id: membership.id },
+        data: { role: ClassroomMembershipRole.OWNER },
+      }),
+      prisma.classroomMembership.update({
+        where: { classroomId_userId: { classroomId, userId: classroom.ownerId } },
+        data: { role: ClassroomMembershipRole.TEACHER },
+      }),
+    ]);
+    return;
+  }
+
+  if (
+    currentRole === ClassroomMembershipRole.STUDENT &&
+    newRole === ClassroomMembershipRole.CO_TEACHER
+  ) {
+    await prisma.classroomMembership.update({
+      where: { id: membership.id },
+      data: { role: newRole },
+    });
+    return;
+  }
+
+  if (
+    currentRole === ClassroomMembershipRole.CO_TEACHER &&
+    newRole === ClassroomMembershipRole.STUDENT
+  ) {
+    await prisma.classroomMembership.update({
+      where: { id: membership.id },
+      data: { role: newRole },
+    });
+    return;
+  }
+
+  throw new ClassroomServiceError(
+    "INVALID_ROLE_CHANGE",
+    `Can't change role from ${currentRole} to ${newRole}.`,
+  );
+}
