@@ -4,6 +4,7 @@ import type { SessionUser } from "@/auth/session";
 import { assertManagementAccess } from "@/features/classroom/services/classroom-service";
 import { canManageClassroom } from "@/features/classroom/lib/can-manage";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
+import { notifySubmissionReturned } from "@/features/notifications/services/notification-generator";
 import { getFileAttachmentsByEntityIds, type AttachedFileSummary } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
@@ -435,6 +436,7 @@ async function assertAssignmentInClassroom(
 type ManagedAssignment = {
   id: string;
   classroomId: string;
+  title: string;
   status: AssignmentStatus;
   dueDate: Date | null;
   points: number | null;
@@ -458,6 +460,7 @@ async function loadAssignmentForManager(
     select: {
       id: true,
       classroomId: true,
+      title: true,
       status: true,
       dueDate: true,
       points: true,
@@ -747,7 +750,7 @@ export async function returnSubmission(
   studentId: string,
   user: SessionUser,
 ): Promise<SubmissionReviewDetail> {
-  await loadAssignmentForManager(classroomId, assignmentId, user);
+  const assignment = await loadAssignmentForManager(classroomId, assignmentId, user);
   await assertActiveStudentOfClassroom(classroomId, studentId);
 
   const submission = await findSubmissionByAssignmentAndStudent(assignmentId, studentId);
@@ -778,13 +781,20 @@ export async function returnSubmission(
   }
 
   const now = new Date();
+  const isGraded = submission.grade !== null;
   await prisma.submission.update({
     where: { id: submission.id },
     data: {
       status: SubmissionStatus.RETURNED,
       returnedAt: now,
-      gradedAt: submission.grade !== null ? now : null,
+      gradedAt: isGraded ? now : null,
     },
+  });
+
+  await notifySubmissionReturned({
+    studentId,
+    assignmentTitle: assignment.title,
+    isGraded,
   });
 
   return getSubmissionDetails(classroomId, assignmentId, studentId, user);

@@ -5,6 +5,7 @@ import {
   hasManagementAccess,
 } from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
+import { notifyAnnouncementPublished } from "@/features/notifications/services/notification-generator";
 import { getFileAttachmentsByEntityIds } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
@@ -174,6 +175,13 @@ export async function createAnnouncement(
     title: deriveTitleFromContent(content),
     content,
     status: AnnouncementStatus.PUBLISHED,
+  });
+
+  await notifyAnnouncementPublished({
+    classroomId,
+    classroomTitle: classroom.title,
+    authorId: user.id,
+    announcementContent: content,
   });
 
   return toAnnouncementSummary(created, [], user.id, true);

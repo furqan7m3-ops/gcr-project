@@ -6,6 +6,7 @@ import {
   hasManagementAccess,
 } from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
+import { notifyAssignmentPublished } from "@/features/notifications/services/notification-generator";
 import { getFileAttachmentsByEntityIds, type AttachedFileSummary } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
@@ -199,6 +200,15 @@ export async function createAssignment(
     return assignment;
   });
 
+  if (status === AssignmentStatus.PUBLISHED) {
+    await notifyAssignmentPublished({
+      classroomId,
+      classroomTitle: classroom.title,
+      authorId: user.id,
+      assignmentTitle: created.title,
+    });
+  }
+
   const attachmentsByAssignmentId = await getFileAttachmentsByEntityIds(
     [created.id],
     FileAttachmentType.ASSIGNMENT,
@@ -245,6 +255,20 @@ export async function publishAssignment(assignmentId: string, user: SessionUser)
     where: { id: assignmentId },
     data: { status: AssignmentStatus.PUBLISHED },
   });
+
+  const classroom = await prisma.classroom.findUnique({
+    where: { id: existing.classroomId },
+    select: { title: true },
+  });
+
+  if (classroom) {
+    await notifyAssignmentPublished({
+      classroomId: existing.classroomId,
+      classroomTitle: classroom.title,
+      authorId: user.id,
+      assignmentTitle: existing.title,
+    });
+  }
 }
 
 export async function closeAssignment(assignmentId: string, user: SessionUser): Promise<void> {

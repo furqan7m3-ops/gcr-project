@@ -100,7 +100,7 @@ export async function joinClassroomAction(
       };
     }
 
-    const classroom = await classroomService.joinClassroomByCode(user.id, parsed.data.code);
+    const classroom = await classroomService.joinClassroomByCode(user, parsed.data.code);
     revalidatePath("/classes");
     revalidatePath("/dashboard");
 

@@ -1,10 +1,15 @@
 import type { SessionUser } from "@/auth/session";
+import {
+  notifyInvitationAccepted,
+  notifyMemberJoined,
+} from "@/features/notifications/services/notification-generator";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import {
   ClassroomMembershipRole,
   ClassroomMembershipStatus,
   ClassroomStatus,
+  InvitationStatus,
   UserRole,
 } from "@/generated/prisma/enums";
 
@@ -287,7 +292,10 @@ export async function archiveClassroom(classroomId: string, user: SessionUser): 
   });
 }
 
-export async function joinClassroomByCode(userId: string, code: string): Promise<ClassroomSummary> {
+export async function joinClassroomByCode(
+  user: SessionUser,
+  code: string,
+): Promise<ClassroomSummary> {
   // Case-insensitive: generated codes are lowercase, but codes can be stored or
   // typed in any case (e.g. seeded/legacy data), so match on either.
   const classroom = await prisma.classroom.findFirst({
@@ -307,7 +315,7 @@ export async function joinClassroomByCode(userId: string, code: string): Promise
   }
 
   const existingMembership = await prisma.classroomMembership.findUnique({
-    where: { classroomId_userId: { classroomId: classroom.id, userId } },
+    where: { classroomId_userId: { classroomId: classroom.id, userId: user.id } },
   });
 
   if (existingMembership?.status === ClassroomMembershipStatus.ACTIVE) {
@@ -326,11 +334,43 @@ export async function joinClassroomByCode(userId: string, code: string): Promise
     : await prisma.classroomMembership.create({
         data: {
           classroomId: classroom.id,
-          userId,
+          userId: user.id,
           role: ClassroomMembershipRole.STUDENT,
           status: ClassroomMembershipStatus.ACTIVE,
         },
       });
+
+  // If this join matches a pending invitation (by account or by email), mark
+  // it accepted and notify the specific inviter - otherwise every other
+  // manager just gets the generic "member joined" notice below.
+  const memberName = user.name ?? "A new member";
+  const matchedInvitation = await prisma.invitation.findFirst({
+    where: {
+      classroomId: classroom.id,
+      status: InvitationStatus.PENDING,
+      OR: [{ inviteeUserId: user.id }, ...(user.email ? [{ inviteeEmail: user.email }] : [])],
+    },
+  });
+
+  if (matchedInvitation) {
+    await prisma.invitation.update({
+      where: { id: matchedInvitation.id },
+      data: { status: InvitationStatus.ACCEPTED },
+    });
+
+    await notifyInvitationAccepted({
+      inviterId: matchedInvitation.invitedById,
+      memberName,
+      classroomTitle: classroom.title,
+    });
+  }
+
+  await notifyMemberJoined({
+    classroomId: classroom.id,
+    classroomTitle: classroom.title,
+    memberName,
+    excludeUserIds: matchedInvitation ? [user.id, matchedInvitation.invitedById] : [user.id],
+  });
 
   return toClassroomSummary(classroom, membership.role);
 }
