@@ -2,13 +2,9 @@
 
 import { useCallback, useState } from "react";
 
-import {
-  deleteNotificationAction,
-  markAllNotificationsReadAction,
-  markNotificationReadAction,
-} from "../actions/notification-mutations";
 import { getNotificationsAction } from "../actions/notification-queries";
 import type { NotificationSummary, NotificationType } from "../types";
+import { useNotificationMutations } from "./use-notification-mutations";
 
 export type NotificationTypeFilter = "ALL" | NotificationType;
 
@@ -21,11 +17,11 @@ const PAGE_SIZE = 20;
 
 /**
  * Owns state for the full-page notification center: server-seeded initial
- * data, filter-driven reloads (type + unread-only), cursor pagination, and
- * optimistic mark-read/mark-all/delete. Kept separate from useNotifications
- * (the header dropdown's hook) since the two widgets have different data
- * flows - this one starts from SSR-provided data and resets its whole list
- * whenever a filter changes, which the lazily-opened dropdown never does.
+ * data, filter-driven reloads (type + unread-only), and cursor pagination.
+ * Mutation logic (mark-read/mark-all/delete) is shared with useNotifications
+ * (the header dropdown's hook) via useNotificationMutations - this hook just
+ * derives unread count directly from the loaded list instead of tracking a
+ * separate counter, since the page always has the list loaded.
  */
 export function useNotificationCenter({
   initialNotifications,
@@ -100,72 +96,10 @@ export function useNotificationCenter({
     setIsLoadingMore(false);
   }, [nextCursor, isLoadingMore, unreadOnly, typeFilter]);
 
-  const markRead = useCallback(
-    async (notificationId: string) => {
-      const target = notifications.find((notification) => notification.id === notificationId);
-      if (!target || target.isRead) {
-        return;
-      }
-
-      setNotifications((previous) =>
-        previous.map((notification) =>
-          notification.id === notificationId ? { ...notification, isRead: true } : notification,
-        ),
-      );
-
-      const result = await markNotificationReadAction(notificationId);
-
-      if (result.status !== "success") {
-        setNotifications((previous) =>
-          previous.map((notification) =>
-            notification.id === notificationId ? { ...notification, isRead: false } : notification,
-          ),
-        );
-      }
-    },
-    [notifications],
-  );
-
-  const markAllRead = useCallback(async () => {
-    const previousNotifications = notifications;
-
-    setNotifications((previous) =>
-      previous.map((notification) => ({ ...notification, isRead: true })),
-    );
-
-    const result = await markAllNotificationsReadAction();
-
-    if (result.status !== "success") {
-      setNotifications(previousNotifications);
-    }
-  }, [notifications]);
-
-  const remove = useCallback(
-    async (notificationId: string) => {
-      const target = notifications.find((notification) => notification.id === notificationId);
-      if (!target) {
-        return;
-      }
-
-      const previousIndex = notifications.findIndex(
-        (notification) => notification.id === notificationId,
-      );
-      setNotifications((previous) =>
-        previous.filter((notification) => notification.id !== notificationId),
-      );
-
-      const result = await deleteNotificationAction(notificationId);
-
-      if (result.status !== "success") {
-        setNotifications((previous) => {
-          const next = [...previous];
-          next.splice(previousIndex, 0, target);
-          return next;
-        });
-      }
-    },
-    [notifications],
-  );
+  const { markRead, markAllRead, remove } = useNotificationMutations({
+    notifications,
+    setNotifications,
+  });
 
   return {
     notifications,

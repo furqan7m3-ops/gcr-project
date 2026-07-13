@@ -1,19 +1,15 @@
 import { z } from "zod";
 
-const notificationTypeValues = [
-  "NEW_ASSIGNMENT",
-  "NEW_MATERIAL",
-  "NEW_ANNOUNCEMENT",
-  "SUBMISSION_RETURNED",
-  "PRIVATE_COMMENT",
-  "GENERAL",
-] as const;
+import { NotificationType } from "@/generated/prisma/enums";
 
 export const listNotificationsSchema = z.object({
   cursor: z.string().uuid("Invalid cursor.").optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
   unreadOnly: z.coerce.boolean().optional().default(false),
-  type: z.enum(notificationTypeValues).optional(),
+  // Validated against the generated enum rather than a hand-listed set of
+  // strings, so this can never drift out of sync with the schema (e.g. a new
+  // NotificationType added later and forgotten here).
+  type: z.nativeEnum(NotificationType).optional(),
 });
 
 export type ListNotificationsInput = z.infer<typeof listNotificationsSchema>;

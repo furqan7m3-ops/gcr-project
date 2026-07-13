@@ -59,7 +59,13 @@ function toAssignmentSummary(
 }
 
 async function findActiveAssignmentOrThrow(assignmentId: string) {
-  const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId } });
+  // Includes the classroom title so publishAssignment doesn't need a second
+  // round trip just to build its notification message - the other three
+  // callers (update/close/delete) simply don't touch the extra field.
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    include: { classroom: { select: { title: true } } },
+  });
 
   if (!assignment || assignment.deletedAt) {
     throw new ClassroomServiceError("NOT_FOUND", "Assignment not found.");
@@ -257,20 +263,13 @@ export async function publishAssignment(assignmentId: string, user: SessionUser)
     data: { status: AssignmentStatus.PUBLISHED },
   });
 
-  const classroom = await prisma.classroom.findUnique({
-    where: { id: existing.classroomId },
-    select: { title: true },
+  await notifyAssignmentPublished({
+    classroomId: existing.classroomId,
+    classroomTitle: existing.classroom.title,
+    authorId: user.id,
+    assignmentId: existing.id,
+    assignmentTitle: existing.title,
   });
-
-  if (classroom) {
-    await notifyAssignmentPublished({
-      classroomId: existing.classroomId,
-      classroomTitle: classroom.title,
-      authorId: user.id,
-      assignmentId: existing.id,
-      assignmentTitle: existing.title,
-    });
-  }
 }
 
 export async function closeAssignment(assignmentId: string, user: SessionUser): Promise<void> {

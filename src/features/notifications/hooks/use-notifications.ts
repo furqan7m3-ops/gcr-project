@@ -2,13 +2,9 @@
 
 import { useCallback, useState } from "react";
 
-import {
-  deleteNotificationAction,
-  markAllNotificationsReadAction,
-  markNotificationReadAction,
-} from "../actions/notification-mutations";
 import { getNotificationsAction } from "../actions/notification-queries";
 import type { NotificationSummary } from "../types";
+import { useNotificationMutations } from "./use-notification-mutations";
 
 interface UseNotificationsOptions {
   initialUnreadCount: number;
@@ -16,10 +12,11 @@ interface UseNotificationsOptions {
 
 /**
  * Owns all client-side state for the notification dropdown: the list (fetched
- * lazily on open), the badge count, and optimistic mark-read/mark-all/delete
- * with revert-on-failure. Kept as plain useState rather than useOptimistic
- * since this widget isn't bound to a Server Component's props the way a page
- * list is - it's a self-contained, lazily-opened overlay with its own state.
+ * lazily on open) and the badge count. Mutation logic (mark-read/mark-all/
+ * delete) is shared with useNotificationCenter via useNotificationMutations -
+ * the only thing specific to this widget is that it tracks unread count as
+ * its own state (so the badge has a number before the list has ever been
+ * fetched), rather than deriving it from the loaded list.
  */
 export function useNotifications({ initialUnreadCount }: UseNotificationsOptions) {
   const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
@@ -66,76 +63,11 @@ export function useNotifications({ initialUnreadCount }: UseNotificationsOptions
     setIsLoadingMore(false);
   }, [nextCursor, isLoadingMore]);
 
-  const markRead = useCallback(
-    async (notificationId: string) => {
-      const target = notifications.find((notification) => notification.id === notificationId);
-      if (!target || target.isRead) {
-        return;
-      }
-
-      setNotifications((previous) =>
-        previous.map((notification) =>
-          notification.id === notificationId ? { ...notification, isRead: true } : notification,
-        ),
-      );
-      setUnreadCount((previous) => Math.max(0, previous - 1));
-
-      const result = await markNotificationReadAction(notificationId);
-
-      if (result.status !== "success") {
-        setNotifications((previous) =>
-          previous.map((notification) =>
-            notification.id === notificationId ? { ...notification, isRead: false } : notification,
-          ),
-        );
-        setUnreadCount((previous) => previous + 1);
-      }
-    },
-    [notifications],
-  );
-
-  const markAllRead = useCallback(async () => {
-    const previousNotifications = notifications;
-    const previousUnreadCount = unreadCount;
-
-    setNotifications((previous) =>
-      previous.map((notification) => ({ ...notification, isRead: true })),
-    );
-    setUnreadCount(0);
-
-    const result = await markAllNotificationsReadAction();
-
-    if (result.status !== "success") {
-      setNotifications(previousNotifications);
-      setUnreadCount(previousUnreadCount);
-    }
-  }, [notifications, unreadCount]);
-
-  const remove = useCallback(
-    async (notificationId: string) => {
-      const target = notifications.find((notification) => notification.id === notificationId);
-      if (!target) {
-        return;
-      }
-
-      setNotifications((previous) =>
-        previous.filter((notification) => notification.id !== notificationId),
-      );
-      if (!target.isRead) {
-        setUnreadCount((previous) => Math.max(0, previous - 1));
-      }
-
-      const result = await deleteNotificationAction(notificationId);
-
-      if (result.status !== "success") {
-        setNotifications((previous) => [target, ...previous]);
-        if (!target.isRead) {
-          setUnreadCount((previous) => previous + 1);
-        }
-      }
-    },
-    [notifications],
-  );
+  const { markRead, markAllRead, remove } = useNotificationMutations({
+    notifications,
+    setNotifications,
+    onUnreadDelta: (delta) => setUnreadCount((previous) => Math.max(0, previous + delta)),
+  });
 
   return {
     notifications,
