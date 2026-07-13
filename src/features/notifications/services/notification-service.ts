@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { NotificationType } from "@/generated/prisma/enums";
 
 import { NotificationServiceError } from "../lib/errors";
 import type { NotificationPage, NotificationSummary } from "../types";
@@ -7,6 +8,7 @@ export interface ListNotificationsOptions {
   cursor?: string;
   limit: number;
   unreadOnly?: boolean;
+  type?: NotificationType;
 }
 
 function toNotificationSummary(notification: {
@@ -39,6 +41,7 @@ export async function listNotifications(
       recipientId: userId,
       deletedAt: null,
       ...(options.unreadOnly ? { isRead: false } : {}),
+      ...(options.type ? { type: options.type } : {}),
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: options.limit + 1,

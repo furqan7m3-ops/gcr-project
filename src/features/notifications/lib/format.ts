@@ -39,3 +39,12 @@ export const NOTIFICATION_TYPE_ICON: Record<NotificationType, LucideIcon> = {
   PRIVATE_COMMENT: MessageSquare,
   GENERAL: Bell,
 };
+
+export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
+  NEW_ASSIGNMENT: "Assignments",
+  NEW_MATERIAL: "Materials",
+  NEW_ANNOUNCEMENT: "Announcements",
+  SUBMISSION_RETURNED: "Returned work",
+  PRIVATE_COMMENT: "Comments",
+  GENERAL: "General",
+};

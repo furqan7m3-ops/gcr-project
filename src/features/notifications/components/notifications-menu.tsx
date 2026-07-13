@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Bell, Check } from "lucide-react";
 
 import { EmptyState } from "@/components/states/empty-state";
@@ -134,6 +135,15 @@ export function NotificationsMenu({ initialUnreadCount }: NotificationsMenuProps
             </div>
           )}
         </div>
+
+        <DropdownMenuSeparator />
+        <Link
+          href="/notifications"
+          onClick={() => setOpen(false)}
+          className="block px-2.5 py-2 text-center text-xs font-medium text-primary hover:underline"
+        >
+          View all notifications
+        </Link>
       </DropdownMenuContent>
     </DropdownMenu>
   );

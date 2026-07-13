@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Archive,
   BarChart3,
+  Bell,
   BookOpen,
   Calendar,
   ClipboardList,
@@ -30,6 +31,7 @@ export const navSections: NavSection[] = [
   {
     items: [
       { label: "Home", href: "/dashboard", icon: Home },
+      { label: "Notifications", href: "/notifications", icon: Bell },
       { label: "Calendar", href: "/calendar", icon: Calendar },
       {
         label: "To review",
