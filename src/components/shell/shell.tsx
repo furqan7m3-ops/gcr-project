@@ -14,10 +14,11 @@ import type { ShellUser } from "./user-menu";
 
 interface ShellProps {
   user: ShellUser;
+  initialUnreadCount: number;
   children: ReactNode;
 }
 
-export function Shell({ user, children }: ShellProps) {
+export function Shell({ user, initialUnreadCount, children }: ShellProps) {
   const sections = getVisibleSections(user.role as UserRole);
 
   return (
@@ -30,7 +31,7 @@ export function Shell({ user, children }: ShellProps) {
           Skip to main content
         </a>
         <div className="flex min-h-screen flex-col bg-background">
-          <Header user={user} />
+          <Header user={user} initialUnreadCount={initialUnreadCount} />
           <div className="flex flex-1">
             <Sidebar sections={sections} />
             <MobileNav sections={sections} />

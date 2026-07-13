@@ -4,13 +4,19 @@ import Link from "next/link";
 import { GraduationCap, Menu, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { NotificationsMenu } from "@/features/notifications/components/notifications-menu";
 
-import { NotificationsMenu } from "./notifications-menu";
 import { SearchBar } from "./search-bar";
 import { useSidebar } from "./sidebar-context";
 import { UserMenu, type ShellUser } from "./user-menu";
 
-export function Header({ user }: { user: ShellUser }) {
+export function Header({
+  user,
+  initialUnreadCount,
+}: {
+  user: ShellUser;
+  initialUnreadCount: number;
+}) {
   const { toggleCollapsed, setMobileOpen } = useSidebar();
 
   function handleMenuClick() {
@@ -40,7 +46,7 @@ export function Header({ user }: { user: ShellUser }) {
         <Button variant="ghost" size="icon" aria-label="Search" className="md:hidden">
           <Search className="h-5 w-5" />
         </Button>
-        <NotificationsMenu />
+        <NotificationsMenu initialUnreadCount={initialUnreadCount} />
         <UserMenu user={user} />
       </div>
     </header>

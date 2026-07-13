@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authConfig } from "@/auth";
 import { Shell } from "@/components/shell/shell";
+import { getUnreadNotificationCount } from "@/features/notifications/queries/notification-queries";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = (await getServerSession(authConfig as never)) as {
@@ -20,6 +21,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const { name, email, image, role } = session.user;
+  const initialUnreadCount = await getUnreadNotificationCount();
 
-  return <Shell user={{ name, email, image, role: role ?? "STUDENT" }}>{children}</Shell>;
+  return (
+    <Shell
+      user={{ name, email, image, role: role ?? "STUDENT" }}
+      initialUnreadCount={initialUnreadCount}
+    >
+      {children}
+    </Shell>
+  );
 }
