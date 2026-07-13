@@ -15,6 +15,7 @@ interface NotificationPayload {
   type: NotificationType;
   title: string;
   message: string;
+  link: string;
 }
 
 /** Validates every recipient actually exists before writing - a stale or
@@ -43,6 +44,7 @@ async function createNotificationsForRecipients(
       type: payload.type,
       title: payload.title,
       message: payload.message,
+      link: payload.link,
     })),
   });
 }
@@ -94,6 +96,7 @@ export async function notifyAnnouncementPublished(params: {
       type: NotificationType.NEW_ANNOUNCEMENT,
       title: `New announcement in ${params.classroomTitle}`,
       message: truncate(params.announcementContent, 140),
+      link: `/classes/${params.classroomId}/stream`,
     });
   } catch (error) {
     console.error("notifyAnnouncementPublished failed:", error);
@@ -108,6 +111,7 @@ export async function notifyAssignmentPublished(params: {
   classroomId: string;
   classroomTitle: string;
   authorId: string;
+  assignmentId: string;
   assignmentTitle: string;
 }): Promise<void> {
   try {
@@ -118,6 +122,7 @@ export async function notifyAssignmentPublished(params: {
       type: NotificationType.NEW_ASSIGNMENT,
       title: `New assignment in ${params.classroomTitle}`,
       message: `"${params.assignmentTitle}" was just posted.`,
+      link: `/classes/${params.classroomId}/classwork/${params.assignmentId}`,
     });
   } catch (error) {
     console.error("notifyAssignmentPublished failed:", error);
@@ -132,6 +137,8 @@ export async function notifyAssignmentPublished(params: {
  * "submission returned" and "assignment graded" events with one call site. */
 export async function notifySubmissionReturned(params: {
   studentId: string;
+  classroomId: string;
+  assignmentId: string;
   assignmentTitle: string;
   isGraded: boolean;
 }): Promise<void> {
@@ -142,6 +149,10 @@ export async function notifySubmissionReturned(params: {
       message: params.isGraded
         ? `"${params.assignmentTitle}" was graded and returned.`
         : `"${params.assignmentTitle}" was returned by your teacher.`,
+      // The assignment detail page is where a student sees both their
+      // submission and (once returned) their grade and feedback - there's no
+      // separate "my submission" route to link to instead.
+      link: `/classes/${params.classroomId}/classwork/${params.assignmentId}`,
     });
   } catch (error) {
     console.error("notifySubmissionReturned failed:", error);
@@ -153,6 +164,7 @@ export async function notifySubmissionReturned(params: {
  * for the same invitation. */
 export async function notifyInvitationAccepted(params: {
   inviterId: string;
+  classroomId: string;
   memberName: string;
   classroomTitle: string;
 }): Promise<void> {
@@ -161,6 +173,7 @@ export async function notifyInvitationAccepted(params: {
       type: NotificationType.GENERAL,
       title: "Invitation accepted",
       message: `${params.memberName} accepted your invitation to join ${params.classroomTitle}.`,
+      link: `/classes/${params.classroomId}/people`,
     });
   } catch (error) {
     console.error("notifyInvitationAccepted failed:", error);
@@ -187,6 +200,7 @@ export async function notifyMemberJoined(params: {
       type: NotificationType.GENERAL,
       title: "New member joined",
       message: `${params.memberName} joined ${params.classroomTitle}.`,
+      link: `/classes/${params.classroomId}/people`,
     });
   } catch (error) {
     console.error("notifyMemberJoined failed:", error);

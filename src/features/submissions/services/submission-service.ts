@@ -793,6 +793,8 @@ export async function returnSubmission(
 
   await notifySubmissionReturned({
     studentId,
+    classroomId,
+    assignmentId,
     assignmentTitle: assignment.title,
     isGraded,
   });

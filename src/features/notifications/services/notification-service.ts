@@ -16,6 +16,7 @@ function toNotificationSummary(notification: {
   type: NotificationSummary["type"];
   title: string;
   message: string;
+  link: string | null;
   isRead: boolean;
   createdAt: Date;
 }): NotificationSummary {
@@ -24,6 +25,7 @@ function toNotificationSummary(notification: {
     type: notification.type,
     title: notification.title,
     message: notification.message,
+    link: notification.link,
     isRead: notification.isRead,
     createdAt: notification.createdAt,
   };

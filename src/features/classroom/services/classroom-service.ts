@@ -360,6 +360,7 @@ export async function joinClassroomByCode(
 
     await notifyInvitationAccepted({
       inviterId: matchedInvitation.invitedById,
+      classroomId: classroom.id,
       memberName,
       classroomTitle: classroom.title,
     });

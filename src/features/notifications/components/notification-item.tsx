@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,31 @@ interface NotificationItemProps {
   onRemove: (notificationId: string) => void;
 }
 
+const CONTENT_CLASS =
+  "flex min-w-0 flex-1 items-start gap-2.5 text-left rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
 export function NotificationItem({ notification, onMarkRead, onRemove }: NotificationItemProps) {
   const Icon = NOTIFICATION_TYPE_ICON[notification.type];
+
+  const content = (
+    <>
+      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary">
+        <Icon className="h-4 w-4 text-secondary-foreground" aria-hidden />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex items-center gap-1.5">
+          {!notification.isRead ? (
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />
+          ) : null}
+          <p className="truncate text-sm font-medium text-foreground">{notification.title}</p>
+        </div>
+        <p className="line-clamp-2 text-xs text-muted-foreground">{notification.message}</p>
+        <p className="text-xs text-muted-foreground">
+          {formatNotificationTime(notification.createdAt)}
+        </p>
+      </div>
+    </>
+  );
 
   return (
     <div
@@ -24,27 +48,22 @@ export function NotificationItem({ notification, onMarkRead, onRemove }: Notific
         !notification.isRead && "bg-primary/5",
       )}
     >
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-        onClick={() => onMarkRead(notification.id)}
-      >
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary">
-          <Icon className="h-4 w-4 text-secondary-foreground" aria-hidden />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div className="flex items-center gap-1.5">
-            {!notification.isRead ? (
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />
-            ) : null}
-            <p className="truncate text-sm font-medium text-foreground">{notification.title}</p>
-          </div>
-          <p className="line-clamp-2 text-xs text-muted-foreground">{notification.message}</p>
-          <p className="text-xs text-muted-foreground">
-            {formatNotificationTime(notification.createdAt)}
-          </p>
-        </div>
-      </button>
+      {/* Clicking (or activating via keyboard) opens the related resource and
+          marks the notification read in the same interaction - Google
+          Classroom's notifications behave the same way. */}
+      {notification.link ? (
+        <Link
+          href={notification.link}
+          className={CONTENT_CLASS}
+          onClick={() => onMarkRead(notification.id)}
+        >
+          {content}
+        </Link>
+      ) : (
+        <button type="button" className={CONTENT_CLASS} onClick={() => onMarkRead(notification.id)}>
+          {content}
+        </button>
+      )}
       <Button
         type="button"
         variant="ghost"

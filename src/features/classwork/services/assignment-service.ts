@@ -205,6 +205,7 @@ export async function createAssignment(
       classroomId,
       classroomTitle: classroom.title,
       authorId: user.id,
+      assignmentId: created.id,
       assignmentTitle: created.title,
     });
   }
@@ -266,6 +267,7 @@ export async function publishAssignment(assignmentId: string, user: SessionUser)
       classroomId: existing.classroomId,
       classroomTitle: classroom.title,
       authorId: user.id,
+      assignmentId: existing.id,
       assignmentTitle: existing.title,
     });
   }

@@ -403,6 +403,10 @@ model Notification {
   type        NotificationType
   title       String
   message     String           @db.Text
+  // Where clicking the notification should navigate to (e.g. an assignment or
+  // classroom roster page) - computed once at creation time by the notification
+  // generator, since it already has the relevant ids in scope.
+  link        String?
   isRead      Boolean          @default(false)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt

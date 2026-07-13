@@ -8,6 +8,9 @@ export interface NotificationSummary {
   type: NotificationType;
   title: string;
   message: string;
+  /** Where clicking this notification should navigate to; null for
+   * notifications with no associated resource to jump to. */
+  link: string | null;
   isRead: boolean;
   createdAt: Date;
 }
