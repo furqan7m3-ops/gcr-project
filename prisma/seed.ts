@@ -1,7 +1,10 @@
+import bcrypt from "bcryptjs";
+
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   UserRole,
+  UserStatus,
   ClassroomMembershipRole,
   ClassroomMembershipStatus,
   ClassroomStatus,
@@ -39,10 +42,12 @@ async function main() {
 
   await prisma.user.create({
     data: {
-      name: "Mina Alvarez",
-      email: "mina.admin@gcr.dev",
-      passwordHash: "$2b$10$examplehashforlocaldev",
+      name: "Faizan",
+      email: "faizan.admin@gcr.dev",
+      passwordHash: await bcrypt.hash("F@izan4121", 10),
       role: UserRole.ADMIN,
+      status: UserStatus.ACTIVE,
+      mustChangePassword: false,
       avatarUrl:
         "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
     },

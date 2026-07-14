@@ -13,6 +13,14 @@ enum UserRole {
   STUDENT
 }
 
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_PASSWORD_CHANGE
+  ARCHIVED
+}
+
 enum ClassroomMembershipRole {
   OWNER
   TEACHER
@@ -108,16 +116,19 @@ enum ActivityAction {
 }
 
 model User {
-  id              String   @id @default(uuid()) @db.Uuid
-  name            String
-  email           String   @unique
-  passwordHash    String?
-  role            UserRole @default(STUDENT)
-  emailVerified   DateTime?
-  image           String?
-  avatarUrl       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String     @id @default(uuid()) @db.Uuid
+  name               String
+  email              String     @unique
+  passwordHash       String?
+  role               UserRole   @default(STUDENT)
+  status             UserStatus @default(ACTIVE)
+  mustChangePassword Boolean    @default(false)
+  emailVerified      DateTime?
+  image              String?
+  avatarUrl          String?
+  archivedAt         DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   ownedClassrooms       Classroom[]            @relation("ClassroomOwner")
   classroomMemberships  ClassroomMembership[]
@@ -133,6 +144,9 @@ model User {
   activityLogs          ActivityLog[]          @relation("ActivityActor")
   accounts              Account[]
   sessions              Session[]
+
+  @@index([role])
+  @@index([status])
 }
 
 model Account {

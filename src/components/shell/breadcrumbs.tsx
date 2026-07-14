@@ -10,10 +10,11 @@ export interface BreadcrumbItem {
 
 interface BreadcrumbsProps {
   items: BreadcrumbItem[];
+  homeHref?: string;
   className?: string;
 }
 
-export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
+export function Breadcrumbs({ items, homeHref = "/dashboard", className }: BreadcrumbsProps) {
   if (items.length === 0) {
     return null;
   }
@@ -21,7 +22,7 @@ export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
   return (
     <nav aria-label="Breadcrumb" className={cn("flex items-center gap-1.5 text-sm", className)}>
       <Link
-        href="/dashboard"
+        href={homeHref}
         className="flex items-center text-muted-foreground transition-colors hover:text-foreground"
       >
         <Home className="h-4 w-4" />

@@ -7,6 +7,7 @@ interface SectionHeaderProps {
   title: string;
   description?: string;
   breadcrumbs?: BreadcrumbItem[];
+  breadcrumbsHomeHref?: string;
   actions?: ReactNode;
   className?: string;
 }
@@ -15,12 +16,15 @@ export function SectionHeader({
   title,
   description,
   breadcrumbs,
+  breadcrumbsHomeHref,
   actions,
   className,
 }: SectionHeaderProps) {
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      {breadcrumbs && breadcrumbs.length > 0 ? <Breadcrumbs items={breadcrumbs} /> : null}
+      {breadcrumbs && breadcrumbs.length > 0 ? (
+        <Breadcrumbs items={breadcrumbs} homeHref={breadcrumbsHomeHref} />
+      ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>

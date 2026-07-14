@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 
 import { authConfig } from "@/auth";
+import { ForbiddenToast } from "@/components/admin/forbidden-toast";
 import { Shell } from "@/components/shell/shell";
 import { getUnreadNotificationCount } from "@/features/notifications/queries/notification-queries";
 
@@ -28,6 +30,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       user={{ name, email, image, role: role ?? "STUDENT" }}
       initialUnreadCount={initialUnreadCount}
     >
+      <Suspense fallback={null}>
+        <ForbiddenToast />
+      </Suspense>
       {children}
     </Shell>
   );

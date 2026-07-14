@@ -3,17 +3,20 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { UserStatus } from "@/generated/prisma/enums";
 
 declare module "next-auth" {
   interface Session {
     user: DefaultSession["user"] & {
       id: string;
       role: string;
+      mustChangePassword: boolean;
     };
   }
 
   interface User {
     role?: string;
+    mustChangePassword?: boolean;
   }
 }
 
@@ -51,12 +54,23 @@ export const authConfig: NextAuthOptions = {
           return null;
         }
 
+        // Only ACTIVE and PENDING_PASSWORD_CHANGE accounts may sign in; the
+        // latter is allowed through so the user can be routed to the forced
+        // change-password flow rather than being locked out entirely.
+        if (
+          user.status !== UserStatus.ACTIVE &&
+          user.status !== UserStatus.PENDING_PASSWORD_CHANGE
+        ) {
+          return null;
+        }
+
         return {
           id: user.id,
           name: user.name,
           email: user.email,
           image: user.image ?? user.avatarUrl ?? null,
           role: user.role as string,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
@@ -66,6 +80,8 @@ export const authConfig: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role ?? "STUDENT";
+        token.mustChangePassword =
+          (user as { mustChangePassword?: boolean }).mustChangePassword ?? false;
       }
 
       return token;
@@ -74,6 +90,7 @@ export const authConfig: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = (token.role as string) ?? "STUDENT";
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }
 
       return session;
