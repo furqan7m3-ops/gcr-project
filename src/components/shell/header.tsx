@@ -13,9 +13,11 @@ import { UserMenu, type ShellUser } from "./user-menu";
 export function Header({
   user,
   initialUnreadCount,
+  platformName = "GCR",
 }: {
   user: ShellUser;
   initialUnreadCount: number;
+  platformName?: string;
 }) {
   const { toggleCollapsed, setMobileOpen } = useSidebar();
 
@@ -37,7 +39,7 @@ export function Header({
       </Button>
       <Link href="/dashboard" className="flex items-center gap-2 pr-2">
         <GraduationCap className="h-6 w-6 text-primary" aria-hidden />
-        <span className="hidden text-lg font-medium text-foreground sm:inline">GCR</span>
+        <span className="hidden text-lg font-medium text-foreground sm:inline">{platformName}</span>
       </Link>
       <div className="flex flex-1 items-center justify-end gap-1 md:justify-start">
         <SearchBar className="hidden md:flex" />

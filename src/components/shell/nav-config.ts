@@ -7,7 +7,10 @@ import {
   Calendar,
   ClipboardList,
   Home,
+  LockKeyhole,
+  ScrollText,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -53,7 +56,25 @@ export const navSections: NavSection[] = [
         icon: ShieldCheck,
         roles: [UserRole.ADMIN],
       },
+      {
+        label: "Moderation",
+        href: "/admin/moderation",
+        icon: ShieldAlert,
+        roles: [UserRole.ADMIN],
+      },
       { label: "Reports", href: "/admin/reports", icon: BarChart3, roles: [UserRole.ADMIN] },
+      {
+        label: "Audit Logs",
+        href: "/admin/audit-logs",
+        icon: ScrollText,
+        roles: [UserRole.ADMIN],
+      },
+      {
+        label: "Security",
+        href: "/admin/security",
+        icon: LockKeyhole,
+        roles: [UserRole.ADMIN],
+      },
     ],
   },
   {

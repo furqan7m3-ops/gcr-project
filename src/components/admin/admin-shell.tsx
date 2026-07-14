@@ -12,10 +12,11 @@ import { AdminSidebar } from "./admin-sidebar";
 
 interface AdminShellProps {
   user: ShellUser;
+  platformName?: string;
   children: ReactNode;
 }
 
-export function AdminShell({ user, children }: AdminShellProps) {
+export function AdminShell({ user, platformName, children }: AdminShellProps) {
   return (
     <TooltipProvider delayDuration={200}>
       <SidebarProvider>
@@ -26,7 +27,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
           Skip to main content
         </a>
         <div className="flex min-h-screen flex-col bg-background">
-          <AdminHeader user={user} />
+          <AdminHeader user={user} platformName={platformName} />
           <div className="flex flex-1">
             <AdminSidebar />
             <AdminMobileNav />

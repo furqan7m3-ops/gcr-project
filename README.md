@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus several complete vertical slices of product functionality: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication, the shared authenticated application shell (responsive header/sidebar/navigation), a complete Classroom module (create/join/leave/archive classes, role-based authorization, classroom detail shell with Stream/Classwork/People tabs), a complete Stream module (announcements with edit/delete/pin, and comments with optimistic UI), and a complete Classwork module (topics, materials, assignments with a draft/published/closed lifecycle, and a per-assignment detail page). People, Submissions/grading, Notifications, and Search are still placeholder or UI-only screens pending future phases.
+GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar, a global search, an "Archived classes" listing page, and a personal account-settings page are the remaining UI-only or missing pieces.
 
 ## Architecture
 
@@ -76,7 +76,15 @@ The project is a monolithic Next.js application using the App Router, Server Act
 
 ### Get a working login
 
-The seed script (`prisma/seed.ts`) creates four users, but their committed `passwordHash` values are placeholders - not real credentials. Before anyone can sign in, set a real bcrypt hash on at least one seed user.
+The seed script (`prisma/seed.ts`) creates four users. The admin account has a real, working password out of the box; the teacher and student accounts still have a placeholder `passwordHash` and need a one-time patch before they can sign in.
+
+**Admin (works immediately after seeding):**
+
+- Email: `faizan.admin@gcr.dev`
+- Password: `F@izan4121`
+- Sign in at `/login` and you land on `/dashboard`; the admin nav section (and `/admin`) is visible immediately.
+
+**Teacher / student (need a manual password patch):**
 
 1. Generate a hash for a password of your choice:
    ```bash
@@ -89,7 +97,9 @@ The seed script (`prisma/seed.ts`) creates four users, but their committed `pass
    ```
 3. Sign in at `/login` with that email and the plaintext password you hashed. The login page also shows a "Dev seed accounts" hint box outside of production builds.
 
-Seed accounts: `mina.admin@gcr.dev` (ADMIN), `daniel.teacher@gcr.dev` (TEACHER, owns "Advanced Mathematics 101"), `sofia.student@gcr.dev` / `liam.student@gcr.dev` (STUDENT, both enrolled in that class). Only teacher/student have a `passwordHash` worth patching for typical testing - patch admin's too if you need to test `/admin/*` nav visibility.
+Seed accounts: `faizan.admin@gcr.dev` (ADMIN), `daniel.teacher@gcr.dev` (TEACHER, owns "Advanced Mathematics 101"), `sofia.student@gcr.dev` / `liam.student@gcr.dev` (STUDENT, both enrolled in that class).
+
+**Note on account lockout:** 5 consecutive failed sign-in attempts on any account auto-locks it (`UserStatus.LOCKED`) until an admin unlocks it from `/admin/security/locked-accounts` — keep this in mind while testing wrong-password flows. Public self-registration does not exist; every account is created by an administrator (`/admin/users`) or seeded directly.
 
 ### User flow walkthrough
 
@@ -100,13 +110,13 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 - Visit `/login`, sign in as the teacher (`daniel.teacher@gcr.dev`).
 - Try a wrong password first if you want to see the inline error state.
 - On success you land on `/dashboard`.
-- Open an incognito window and try visiting `/dashboard` directly while signed out - you should be redirected to `/login` (middleware-enforced).
+- Open an incognito window and try visiting `/dashboard` directly while signed out - you should be redirected to `/login` (enforced in `src/proxy.ts`, Next.js's renamed middleware convention).
 
 **2. Application shell**
 
 - Click the hamburger icon (top-left) on desktop - the sidebar collapses to icon-only with hover tooltips; click again to expand.
 - Shrink the browser window below ~1024px - the sidebar disappears and the same hamburger now opens a slide-in drawer.
-- Click the bell icon - an empty "You're all caught up" notifications dropdown (UI only, not wired to real data yet).
+- Click the bell icon - a real notifications dropdown backed by the `Notification` table (unread count badge, mark-as-read, links to the relevant classroom item).
 - Click your avatar (top-right) - dropdown with your name/email/role and a working Sign out.
 
 **3. Classroom list (`/classes`, via the sidebar)**
@@ -120,7 +130,7 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 **4. Classroom detail**
 
 - Click into a class card. You land on a colored banner header with the class title/section and three tabs: **Stream / Classwork / People**.
-- Stream and Classwork are fully implemented (see sections 5-10). People still shows a "coming soon" placeholder - that's expected, not a bug.
+- All three tabs are fully implemented (see sections 5-10 for Stream/Classwork; People shows the roster split into Teachers/Students with an Invite dialog, role changes, and remove-member, all authorized server-side).
 
 **5. Stream - announcements**
 
@@ -161,16 +171,37 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 - Try **Close assignment**, **Edit**, and **Delete** from the same menu - each works with the expected confirmation/toast behavior.
 - As the student, confirm no management menu appears on any assignment card.
 
-**10. Classwork - assignment detail page**
+**10. Classwork - assignment detail page, submissions & grading**
 
 - Click an assignment's title (as either role) to open its dedicated detail page.
 - Confirm it shows the full instructions (untruncated), due date, points, and attachments, reusing the same management menu for teachers.
-- Confirm the side panel: teachers see "0 of N students submitted" (N = actual enrolled student count), students see a "Not submitted" badge - both note that turning in work isn't available yet (submissions are a future phase, not a bug).
+- As the student: turn in work via the submission panel (text answer and/or attachments) - status moves Assigned → Submitted (or Late, past the due date). Turn it in again before the teacher reviews it and it stays editable.
+- As the teacher: open the roster-style submissions list, click into a student's submission, enter a grade (bounded by the assignment's points) and feedback, and return it - the student sees the grade badge and feedback, and a private comment thread is available on either side.
 - As the student, try navigating directly to a **draft** assignment's detail URL - you should get a clean "Assignment not found" page, not the real content.
 
 **11. Responsive check**
 
 - Repeat steps 3-10 with the browser narrowed to a phone-sized viewport (or DevTools device mode) - the drawer nav, dialogs, and comment threads should all remain usable.
+
+## Admin Platform
+
+Everything under `/admin` is gated to `UserRole.ADMIN` at two layers - `src/proxy.ts` (redirects non-admins to `/dashboard?denied=admin` before the page even renders) and `src/app/admin/layout.tsx` (a server-side re-check). Sign in as `faizan.admin@gcr.dev` and use the **Admin** section of the sidebar, or visit the routes below directly.
+
+**Dashboard (`/admin`)** - platform-wide stat tiles (users by role, classrooms, assignments, submissions), a system-overview breakdown, and quick links into every admin area.
+
+**Users (`/admin/users`)** - searchable/filterable/sortable/paginated user table. Create a user (a temporary password is generated and shown once), edit name/email/role, change status (Active/Inactive/Suspended/Archived - Locked is system-only, see Security), reset a password, or force a password change on next sign-in. Public self-registration is intentionally absent - every account originates here or from the seed script.
+
+**Classrooms (`/admin/classrooms`)** - every classroom on the platform, regardless of owner. Archive/restore/delete (soft-delete), transfer ownership to another user by email, assign an additional teacher by email, and view per-classroom statistics (members, assignments, submissions) and its member list.
+
+**Moderation (`/admin/moderation`)** - a single console for moderating Announcements, Comments, Materials, and Assignments across every classroom (switch content type via the dropdown). Archive, soft-delete, or restore any item; every action requires a confirmation dialog first.
+
+**Reports (`/admin/reports`)** - the same stat tiles as the dashboard plus a platform-growth chart (weekly signups/classrooms, last 12 weeks) and a recent-activity feed, with links out to six detailed, filterable/sortable reports: Teacher Activity, Student Activity, Assignment Completion, Submission Rates, Classroom Activity, and Inactive Users. Every report returns a `{ columns, rows }` shape ready for a future CSV/PDF exporter (not built yet, by design).
+
+**Audit Logs (`/admin/audit-logs`)** - a searchable, filterable, paginated trail of every administrative event: user create/update/role-change/suspend/password-reset, classroom archive, content moderation actions, account lock/unlock, and session termination. Filter by exact event type or search by actor/target.
+
+**Settings (`/admin/settings`)** - platform-wide configuration: platform name (shown in both app and admin headers, and the page `<title>`), academic year, session timeout, max upload size, default classroom settings (applied to every newly created classroom), notification defaults, and the password policy (min length, uppercase/number/symbol requirements - enforced live on the self-service change-password form).
+
+**Security (`/admin/security`)** - account-status breakdown, the current password policy, and three drill-down pages: **Active Sessions** (every currently valid signed-in session, with a real "Terminate" action - JWTs are stateless, so this is backed by a `UserLoginSession` table keyed by a session id embedded in the JWT and checked on every request), **Failed Login Attempts** (every unsuccessful sign-in, with email/IP/device), and **Locked Accounts** (auto-locked after 5 consecutive failed attempts; unlock or force a password reset from here).
 
 ## Docker Setup
 
@@ -201,18 +232,24 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 
 ## Folder Structure
 
-- `src/app`: Next.js App Router routes. `(auth)/login` is public; `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`).
-- `src/components/ui`: shadcn-style design-system primitives (button, card, dialog, alert-dialog, dropdown-menu, sheet, tooltip, input, textarea, label, skeleton, badge, avatar, separator) - no domain logic.
-- `src/components/shell`: the application chrome - header, sidebar, mobile drawer, nav config, breadcrumbs, user/notifications menus.
-- `src/components/page`: page-composition scaffolding - page container, section header, dashboard/stat grids.
+- `src/app`: Next.js App Router routes.
+  - `(auth)/login` is public.
+  - `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`, `notifications`, `change-password`).
+  - `admin` is the `UserRole.ADMIN`-gated console (`users`, `classrooms`, `moderation`, `reports` + six report sub-routes, `audit-logs`, `settings`, `security` + three sub-routes), wrapped in its own shell by `admin/layout.tsx`.
+  - `api/auth/[...nextauth]` is the Auth.js route handler.
+- `src/components/ui`: shadcn-style design-system primitives (button, card, table, dialog, alert-dialog, dropdown-menu, sheet, tooltip, input, textarea, select, label, skeleton, badge, avatar, separator) - no domain logic.
+- `src/components/shell`: the teacher/student application chrome - header, sidebar, mobile drawer, nav config, breadcrumbs, user/notifications menus.
+- `src/components/admin`: the parallel admin chrome - admin shell/header/sidebar/mobile-nav, its own nav config, and the forbidden-access toast.
+- `src/components/page`: page-composition scaffolding - page container, section header, dashboard/stat grids, the shared paginated-table `Pagination` control.
 - `src/components/states`: shared empty/error/loading-skeleton components.
 - `src/components/layouts`: the pre-auth marketing shell used by the public landing page.
-- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Currently: `classroom`, `stream`, `classwork` (topics, materials, assignments, and the assignment detail page all live here).
-- `src/auth`: Auth.js configuration (`index.ts`) and the server-side session helper (`session.ts`).
-- `src/lib`: shared utilities, including `lib/auth/permissions.ts` (role/ownership authorization helpers) and `lib/prisma.ts` (Prisma client singleton).
+- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Teacher/student-facing: `classroom`, `stream`, `classwork` (topics, materials, assignments, assignment detail), `submissions` (turn-in + grading), `notifications`, `account` (self-service change-password). Admin-facing, under `features/admin/*`: `users`, `classrooms`, `moderation`, `reports` (dashboard analytics + six detailed report generators), `audit-logs`, `settings`, `security`.
+- `src/auth`: Auth.js configuration (`index.ts` - credentials provider, login-attempt tracking, auto-lockout, per-session JWT tracking) and the server-side session helper (`session.ts`).
+- `src/lib`: shared utilities - `lib/auth/permissions.ts` (role/ownership authorization helpers), `lib/auth/password.ts` / `lib/password-policy.ts` (hashing + policy enforcement), `lib/audit-log.ts` (the single source of truth for which admin events are tracked, shared by every feature that writes or reads the audit trail), `lib/system-settings.ts` (cached read of the platform settings singleton), `lib/prisma.ts` (Prisma client singleton).
+- `src/proxy.ts`: the renamed Next.js middleware convention - auth gate, admin-route gate, forced-password-change redirect, and per-request session-revocation check.
 - `src/generated/prisma`: generated Prisma client - do not edit.
 - `src/config`: environment variable parsing/validation.
-- `docs`: project documentation (UI architecture, database architecture).
+- `docs`: project documentation (UI architecture, database architecture, authentication plan).
 - `prisma`: Prisma schema, migrations, and seed script.
 - `public`: static assets.
 
@@ -245,28 +282,32 @@ Recommended branches:
 
 ## Implemented So Far
 
-- **Authentication**: Auth.js credentials provider, JWT sessions, Prisma adapter, `/login` form, protected-route middleware.
-- **Application shell**: responsive header, collapsible desktop sidebar, mobile drawer navigation, breadcrumbs, user/notifications menus, page-composition primitives, empty/loading/error states.
+- **Authentication & session security**: Auth.js credentials provider, JWT sessions, Prisma adapter, `/login` form, `proxy.ts`-enforced route protection, per-attempt login tracking, auto-lockout after 5 consecutive failures, forced password-change flow, and revocable per-session tracking (a `UserLoginSession` row per sign-in, checked on every request, so a specific session can be terminated despite JWTs otherwise being stateless).
+- **Application shell**: responsive header, collapsible desktop sidebar, mobile drawer navigation, breadcrumbs, user/notifications menus, page-composition primitives, empty/loading/error states - plus a parallel shell for the admin console.
 - **Classroom module**: create/edit/archive a classroom (Teacher/Admin), join/leave by class code (any authenticated user), classroom list ("My Classrooms" cards), classroom detail shell with Stream/Classwork/People tab navigation.
 - **Stream module**: announcements (create/edit/delete/pin/unpin, Teacher/Admin only, students read-only), pinned-first ordering, comments on announcements (create by any member, delete own, teacher/manager can delete any) with optimistic UI, confirmation dialogs on destructive actions, toast notifications throughout.
 - **Classwork module**:
   - _Topics_: create, rename, delete, and drag-and-drop reorder (Teacher/Admin only; students read-only).
   - _Materials_: metadata-only uploads, link/URL materials (auto-typed as video/link), file attachments, optional topic assignment.
   - _Assignments_: create/edit/delete with title, instructions, due date, points, topic, and attachments; a draft → published → closed lifecycle where drafts are invisible to students, not just visually hidden.
-  - _Assignment detail page_: a dedicated page per assignment reusing the shared management menu, attachment list, and due-date formatting; shows a submission-status summary (real enrolled-student counts, no fake submission data) while actual submissions/grading remain a future phase.
+  - _Assignment detail page_: full instructions/attachments, the shared management menu for teachers, and a real submission/grading flow - students turn in text and/or attachments, teachers grade (bounded by the assignment's points) and return work with feedback, and a private comment thread sits alongside each submission.
+- **People module**: classroom roster split into Teachers/Students, an Invite dialog (email or shareable code), role changes (promote/demote co-teacher, transfer ownership), and remove-member - all authorized server-side.
+- **Notifications**: real, database-backed notifications (new assignment/material/announcement, submission returned, private comment) with an unread-count badge and a notification center, generated as a side effect of the actions above.
+- **Admin platform** (`/admin`, `UserRole.ADMIN`-only - see [Admin Platform](#admin-platform) for the full walkthrough): dashboard analytics, user management (create/edit/status/reset password/force password change), classroom administration (archive/restore/delete/transfer ownership/assign teacher), content moderation (archive/delete/restore announcements/comments/materials/assignments), six detailed filterable reports, a full audit log of every administrative action, platform-wide settings (branding, password policy, defaults), and a security dashboard (active sessions, failed logins, account lockouts).
 
   All of the above is authorized server-side (Server Actions + service-layer checks), not just hidden in the UI.
 
 ## Future Modules
 
-Planned modules include:
+Still planned / not yet built:
 
-- People (roster, invitations)
-- Submissions and grading (students turning in work, teachers reviewing/scoring it)
-- Notifications (real data, currently UI-only)
-- Search (real data, currently UI-only)
-- Admin area (users, classrooms, reports)
-- Calendar
+- Calendar (due dates across classes)
+- Global search (the header search bar is currently UI-only)
+- A dedicated "Archived classes" listing page (the archive/restore action itself already works from the class card menu and from `/admin/classrooms`)
+- A personal account-settings page (`/settings` is referenced in navigation but not yet implemented; self-service password change already exists at `/change-password`)
+- Cross-classroom "To review" queue for teachers
+- Real file storage for uploads (materials/assignments/submissions currently record file metadata only; Supabase Storage is the planned backend)
+- CSV/PDF export for admin reports (the report data layer already returns an export-ready `{ columns, rows }` shape; no exporter is wired up yet, by design)
 
 ## Deployment
 

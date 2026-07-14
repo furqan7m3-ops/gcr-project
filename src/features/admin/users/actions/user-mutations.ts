@@ -19,7 +19,7 @@ export async function createUserAction(
   formData: FormData,
 ): Promise<ActionResult<CreatedUserResult>> {
   try {
-    await canAccessAdminArea();
+    const actor = await canAccessAdminArea();
 
     const parsed = createUserSchema.safeParse(formDataToObject(formData));
     if (!parsed.success) {
@@ -30,7 +30,7 @@ export async function createUserAction(
       };
     }
 
-    const result = await userService.createUser(parsed.data);
+    const result = await userService.createUser(parsed.data, actor);
     revalidatePath("/admin/users");
 
     return { status: "success", data: result };

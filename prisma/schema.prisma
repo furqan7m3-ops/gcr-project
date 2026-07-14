@@ -19,6 +19,9 @@ enum UserStatus {
   SUSPENDED
   PENDING_PASSWORD_CHANGE
   ARCHIVED
+  // System-triggered (not admin-set) after too many consecutive failed
+  // logins - distinct from SUSPENDED, which is always an admin decision.
+  LOCKED
 }
 
 enum ClassroomMembershipRole {
@@ -113,6 +116,22 @@ enum ActivityAction {
   INVITED
   SUBMITTED
   RETURNED
+  SUSPENDED
+  ROLE_CHANGED
+  PASSWORD_RESET
+  RESTORED
+  LOCKED
+  UNLOCKED
+  SESSION_TERMINATED
+}
+
+// Admin content-moderation state, orthogonal to a model's own authoring
+// status (e.g. Assignment.status DRAFT/PUBLISHED/CLOSED is the teacher's
+// workflow; moderationStatus is the platform admin's oversight state).
+enum ModerationStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
 }
 
 model User {
@@ -123,6 +142,8 @@ model User {
   role               UserRole   @default(STUDENT)
   status             UserStatus @default(ACTIVE)
   mustChangePassword Boolean    @default(false)
+  failedLoginAttempts Int       @default(0)
+  lockedAt           DateTime?
   emailVerified      DateTime?
   image              String?
   avatarUrl          String?
@@ -144,9 +165,50 @@ model User {
   activityLogs          ActivityLog[]          @relation("ActivityActor")
   accounts              Account[]
   sessions              Session[]
+  updatedSystemSettings SystemSettings[]       @relation("SystemSettingsUpdatedBy")
+  loginAttempts         LoginAttempt[]
+  loginSessions         UserLoginSession[]
 
   @@index([role])
   @@index([status])
+}
+
+// One row per failed (or successful) credentials attempt - drives the
+// "Failed Login Attempts" admin view and the auto-lockout counter on User.
+model LoginAttempt {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  userId    String?  @db.Uuid
+  succeeded Boolean
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
+}
+
+// Tracks individual signed-in sessions (one per login) so a specific session
+// can be listed and revoked - the adapter-scaffolded Session model above is
+// unused, since this app runs JWT-strategy auth with no server-side session
+// record by default. tokenId matches the JWT's "jti" claim; proxy.ts checks
+// revokedAt/expiresAt on every request to enforce termination.
+model UserLoginSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenId    String    @unique
+  userAgent  String?
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
 }
 
 model Account {
@@ -299,6 +361,7 @@ model Announcement {
   title         String
   content       String            @db.Text
   status        AnnouncementStatus @default(PUBLISHED)
+  moderationStatus ModerationStatus @default(ACTIVE)
   isPinned      Boolean           @default(false)
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
@@ -322,6 +385,7 @@ model Material {
   description   String?     @db.Text
   url           String?
   type          MaterialType @default(DOCUMENT)
+  moderationStatus ModerationStatus @default(ACTIVE)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   deletedAt     DateTime?
@@ -344,6 +408,7 @@ model Assignment {
   title               String
   description         String?          @db.Text
   status              AssignmentStatus @default(DRAFT)
+  moderationStatus    ModerationStatus @default(ACTIVE)
   dueDate             DateTime?
   points              Int?
   allowLateSubmission Boolean          @default(true)
@@ -397,6 +462,7 @@ model Comment {
   submissionId    String?           @db.Uuid
   content         String            @db.Text
   visibility      CommentVisibility @default(PUBLIC)
+  moderationStatus ModerationStatus @default(ACTIVE)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   deletedAt       DateTime?
@@ -472,6 +538,11 @@ model ActivityLog {
   entityType   String
   entityId     String        @db.Uuid
   action       ActivityAction
+  // Human-readable snapshot of the target at the time of the event (e.g. a
+  // user's "Name (email)" or an assignment's title) - audit trails should
+  // reflect the state as it happened, not a live join that can go stale or
+  // break once the target itself is renamed or soft-deleted.
+  targetLabel  String?
   metadata     Json?
   createdAt    DateTime      @default(now())
 
@@ -482,4 +553,31 @@ model ActivityLog {
   @@index([actorId, createdAt])
   @@index([classroomId, createdAt])
   @@index([entityType, entityId])
+}
+
+// Platform-wide configuration. Always exactly one row - enforced by the
+// service layer, which always reads/writes a fixed, well-known id rather than
+// letting a second settings row ever be created.
+model SystemSettings {
+  id                       String   @id @db.Uuid
+  platformName             String   @default("GCR")
+  academicYear             String   @default("2025-2026")
+  sessionTimeoutMinutes    Int      @default(60)
+  maxUploadSizeMb          Int      @default(25)
+  defaultAllowComments     Boolean  @default(true)
+  defaultAllowMaterials    Boolean  @default(true)
+  defaultAllowAssignments  Boolean  @default(true)
+  notifyNewAssignment      Boolean  @default(true)
+  notifyNewMaterial        Boolean  @default(true)
+  notifyNewAnnouncement    Boolean  @default(true)
+  notifySubmissionReturned Boolean  @default(true)
+  notifyPrivateComment     Boolean  @default(true)
+  minPasswordLength        Int      @default(8)
+  requirePasswordUppercase Boolean  @default(true)
+  requirePasswordNumber    Boolean  @default(true)
+  requirePasswordSymbol    Boolean  @default(false)
+  updatedAt                DateTime @updatedAt
+  updatedById              String?  @db.Uuid
+
+  updatedBy                User?    @relation("SystemSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 }

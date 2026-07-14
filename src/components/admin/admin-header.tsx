@@ -8,7 +8,13 @@ import { UserMenu, type ShellUser } from "@/components/shell/user-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-export function AdminHeader({ user }: { user: ShellUser }) {
+export function AdminHeader({
+  user,
+  platformName = "GCR",
+}: {
+  user: ShellUser;
+  platformName?: string;
+}) {
   const { toggleCollapsed, setMobileOpen } = useSidebar();
 
   function handleMenuClick() {
@@ -29,7 +35,9 @@ export function AdminHeader({ user }: { user: ShellUser }) {
       </Button>
       <Link href="/admin" className="flex items-center gap-2 pr-2">
         <ShieldCheck className="h-6 w-6 text-primary" aria-hidden />
-        <span className="hidden text-lg font-medium text-foreground sm:inline">GCR Admin</span>
+        <span className="hidden text-lg font-medium text-foreground sm:inline">
+          {platformName} Admin
+        </span>
       </Link>
       <Badge variant="secondary" className="hidden sm:inline-flex">
         Administrator

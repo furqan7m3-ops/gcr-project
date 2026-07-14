@@ -6,10 +6,12 @@ import {
 } from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { notifyAnnouncementPublished } from "@/features/notifications/services/notification-generator";
+import { recordAuditEvent } from "@/lib/audit-log";
 import { getFileAttachmentsByEntityIds } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import {
+  ActivityAction,
   AnnouncementStatus,
   ClassroomStatus,
   CommentVisibility,
@@ -223,6 +225,15 @@ export async function deleteAnnouncement(announcementId: string, user: SessionUs
   await prisma.announcement.update({
     where: { id: announcementId },
     data: { deletedAt: new Date() },
+  });
+
+  await recordAuditEvent({
+    actorId: user.id,
+    action: ActivityAction.DELETED,
+    entityType: "Announcement",
+    entityId: announcementId,
+    targetLabel: existing.title,
+    classroomId: existing.classroomId,
   });
 }
 

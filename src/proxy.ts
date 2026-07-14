@@ -2,6 +2,8 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { prisma } from "@/lib/prisma";
+
 const publicRoutes = ["/", "/login", "/about"];
 const authRoutes = ["/login"];
 const adminRoute = "/admin";
@@ -19,7 +21,22 @@ export default async function proxy(request: NextRequest) {
   const isAuthApiRoute = nextUrl.pathname.startsWith("/api/auth");
 
   const token = await getToken({ req: request, secret: process.env.AUTH_SECRET });
-  const isAuthenticated = Boolean(token);
+  let isAuthenticated = Boolean(token);
+
+  // Enforces "Terminate Session" (Phase 13.9): a JWT is otherwise stateless
+  // and would keep working until it naturally expires, so every authenticated
+  // request re-checks the session row keyed by the token's sessionId and
+  // treats a revoked/expired/missing row as if there were no session at all.
+  if (isAuthenticated && !isAuthApiRoute && typeof token?.sessionId === "string") {
+    const session = await prisma.userLoginSession.findUnique({
+      where: { tokenId: token.sessionId },
+      select: { revokedAt: true, expiresAt: true },
+    });
+
+    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+      isAuthenticated = false;
+    }
+  }
 
   if (!isAuthenticated && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));

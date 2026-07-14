@@ -7,10 +7,16 @@ import {
 } from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { notifyAssignmentPublished } from "@/features/notifications/services/notification-generator";
+import { recordAuditEvent } from "@/lib/audit-log";
 import { getFileAttachmentsByEntityIds, type AttachedFileSummary } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { AssignmentStatus, ClassroomStatus, FileAttachmentType } from "@/generated/prisma/enums";
+import {
+  ActivityAction,
+  AssignmentStatus,
+  ClassroomStatus,
+  FileAttachmentType,
+} from "@/generated/prisma/enums";
 
 import { assertTopicBelongsToClassroom } from "./topic-service";
 import type { AssignmentSummary } from "../types";
@@ -296,5 +302,14 @@ export async function deleteAssignment(assignmentId: string, user: SessionUser):
   await prisma.assignment.update({
     where: { id: assignmentId },
     data: { deletedAt: new Date() },
+  });
+
+  await recordAuditEvent({
+    actorId: user.id,
+    action: ActivityAction.DELETED,
+    entityType: "Assignment",
+    entityId: assignmentId,
+    targetLabel: existing.title,
+    classroomId: existing.classroomId,
   });
 }

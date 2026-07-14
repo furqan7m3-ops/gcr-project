@@ -1,9 +1,10 @@
 import type { SessionUser } from "@/auth/session";
 import { generateTemporaryPassword } from "@/lib/auth/generate-password";
 import { hashPassword } from "@/lib/auth/password";
+import { recordAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
-import { UserRole, UserStatus } from "@/generated/prisma/enums";
+import { ActivityAction, UserRole, UserStatus } from "@/generated/prisma/enums";
 
 import { AdminUserServiceError } from "../lib/errors";
 import type {
@@ -133,7 +134,14 @@ async function assertEmailAvailable(email: string, excludeUserId?: string): Prom
   }
 }
 
-export async function createUser(input: CreateUserInput): Promise<CreatedUserResult> {
+function userTargetLabel(user: { name: string; email: string }): string {
+  return `${user.name} (${user.email})`;
+}
+
+export async function createUser(
+  input: CreateUserInput,
+  actor: SessionUser,
+): Promise<CreatedUserResult> {
   await assertEmailAvailable(input.email);
 
   const temporaryPassword = generateTemporaryPassword();
@@ -151,6 +159,15 @@ export async function createUser(input: CreateUserInput): Promise<CreatedUserRes
       mustChangePassword: true,
     },
     select: summarySelect,
+  });
+
+  await recordAuditEvent({
+    actorId: actor.id,
+    action: ActivityAction.CREATED,
+    entityType: "User",
+    entityId: user.id,
+    targetLabel: userTargetLabel(user),
+    metadata: { role: user.role },
   });
 
   return { user: toSummary(user), temporaryPassword };
@@ -177,6 +194,29 @@ export async function updateUser(
     data: { name: input.name, email: input.email, role: input.role },
     select: summarySelect,
   });
+
+  // Role changes are tracked as their own distinct audit event rather than a
+  // generic "updated" - it's the more significant of the two when both occur
+  // in the same submission.
+  if (existing.role !== input.role) {
+    await recordAuditEvent({
+      actorId: actor.id,
+      action: ActivityAction.ROLE_CHANGED,
+      entityType: "User",
+      entityId: user.id,
+      targetLabel: userTargetLabel(user),
+      metadata: { fromRole: existing.role, toRole: input.role },
+    });
+  } else {
+    await recordAuditEvent({
+      actorId: actor.id,
+      action: ActivityAction.UPDATED,
+      entityType: "User",
+      entityId: user.id,
+      targetLabel: userTargetLabel(user),
+      metadata: { name: input.name, email: input.email },
+    });
+  }
 
   return toSummary(user);
 }
@@ -206,6 +246,17 @@ export async function setUserStatus(
     },
     select: summarySelect,
   });
+
+  if (status === UserStatus.SUSPENDED) {
+    await recordAuditEvent({
+      actorId: actor.id,
+      action: ActivityAction.SUSPENDED,
+      entityType: "User",
+      entityId: user.id,
+      targetLabel: userTargetLabel(user),
+      metadata: { previousStatus: existing.status },
+    });
+  }
 
   return toSummary(user);
 }
@@ -239,6 +290,14 @@ export async function resetPassword(
   await prisma.user.update({
     where: { id: userId },
     data: { passwordHash, mustChangePassword: true },
+  });
+
+  await recordAuditEvent({
+    actorId: actor.id,
+    action: ActivityAction.PASSWORD_RESET,
+    entityType: "User",
+    entityId: userId,
+    targetLabel: userTargetLabel(existing),
   });
 
   return { temporaryPassword };

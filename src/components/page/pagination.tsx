@@ -7,14 +7,16 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-interface UsersPaginationProps {
+interface PaginationProps {
   page: number;
   totalPages: number;
   total: number;
   pageSize: number;
+  /** Noun describing what's being paginated, e.g. "users" or "classrooms". */
+  itemLabel: string;
 }
 
-export function UsersPagination({ page, totalPages, total, pageSize }: UsersPaginationProps) {
+export function Pagination({ page, totalPages, total, pageSize, itemLabel }: PaginationProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -30,7 +32,7 @@ export function UsersPagination({ page, totalPages, total, pageSize }: UsersPagi
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-muted-foreground">
-        Showing {rangeStart}-{rangeEnd} of {total} users
+        Showing {rangeStart}-{rangeEnd} of {total} {itemLabel}
       </p>
       <div className="flex items-center gap-2">
         <Button

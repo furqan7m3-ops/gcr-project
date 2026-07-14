@@ -4,6 +4,7 @@ import {
   notifyMemberJoined,
 } from "@/features/notifications/services/notification-generator";
 import { prisma } from "@/lib/prisma";
+import { getSystemSettings } from "@/lib/system-settings";
 import { Prisma } from "@/generated/prisma/client";
 import {
   ClassroomMembershipRole,
@@ -208,6 +209,8 @@ export async function createClassroom(
   ownerId: string,
   input: CreateClassroomInput,
 ): Promise<ClassroomSummary> {
+  const platformDefaults = await getSystemSettings();
+
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt += 1) {
     const code = generateClassroomCode();
 
@@ -232,6 +235,17 @@ export async function createClassroom(
             userId: ownerId,
             role: ClassroomMembershipRole.OWNER,
             status: ClassroomMembershipStatus.ACTIVE,
+          },
+        });
+
+        // Every classroom gets a settings row seeded from the platform's
+        // configured defaults, editable per-classroom afterward.
+        await tx.classroomSettings.create({
+          data: {
+            classroomId: created.id,
+            allowComments: platformDefaults.defaultAllowComments,
+            allowMaterials: platformDefaults.defaultAllowMaterials,
+            allowAssignments: platformDefaults.defaultAllowAssignments,
           },
         });
 

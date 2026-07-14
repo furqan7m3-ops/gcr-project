@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+
+import { getSystemSettings } from "@/lib/system-settings";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,10 +16,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "GCR",
-  description: "Production-ready foundation for the GCR classroom management platform",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSystemSettings();
+
+  return {
+    title: settings.platformName,
+    description: `Production-ready foundation for the ${settings.platformName} classroom management platform`,
+  };
+}
 
 export default function RootLayout({
   children,

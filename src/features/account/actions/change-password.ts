@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 
 import { AuthError, requireUser } from "@/lib/auth/permissions";
 import { hashPassword } from "@/lib/auth/password";
+import { getPasswordPolicyViolations } from "@/lib/password-policy";
 import { prisma } from "@/lib/prisma";
+import { getSystemSettings } from "@/lib/system-settings";
 import { UserStatus } from "@/generated/prisma/enums";
 import type { ActionResult } from "@/types/action-result";
 
@@ -23,6 +25,16 @@ export async function changePasswordAction(
         status: "error",
         message: "Please fix the highlighted fields.",
         fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    const settings = await getSystemSettings();
+    const violations = getPasswordPolicyViolations(parsed.data.newPassword, settings);
+    if (violations.length > 0) {
+      return {
+        status: "error",
+        message: "Please fix the highlighted fields.",
+        fieldErrors: { newPassword: violations },
       };
     }
 

@@ -2,13 +2,13 @@ import { Users as UsersIcon } from "lucide-react";
 
 import { getCurrentUser } from "@/auth/session";
 import { PageContainer } from "@/components/page/page-container";
+import { Pagination } from "@/components/page/pagination";
 import { SectionHeader } from "@/components/page/section-header";
 import { EmptyState } from "@/components/states/empty-state";
 import { UserRole, UserStatus } from "@/generated/prisma/enums";
 
 import { getUsersPageAction } from "@/features/admin/users/actions/user-queries";
 import { CreateUserButton } from "@/features/admin/users/components/create-user-button";
-import { UsersPagination } from "@/features/admin/users/components/users-pagination";
 import { UsersTable } from "@/features/admin/users/components/users-table";
 import { UsersToolbar } from "@/features/admin/users/components/users-toolbar";
 import type { ListUsersParams, SortDirection, UserSortField } from "@/features/admin/users/types";
@@ -81,11 +81,12 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
             sortField={params.sortField}
             sortDir={params.sortDir ?? "desc"}
           />
-          <UsersPagination
+          <Pagination
             page={usersPage.page}
             totalPages={usersPage.totalPages}
             total={usersPage.total}
             pageSize={usersPage.pageSize}
+            itemLabel="users"
           />
         </>
       )}

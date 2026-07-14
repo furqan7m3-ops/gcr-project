@@ -7,6 +7,7 @@ export const statusLabels: Record<UserStatus, string> = {
   SUSPENDED: "Suspended",
   PENDING_PASSWORD_CHANGE: "Pending password change",
   ARCHIVED: "Archived",
+  LOCKED: "Locked",
 };
 
 export const statusBadgeVariant: Record<UserStatus, NonNullable<BadgeProps["variant"]>> = {
@@ -15,6 +16,7 @@ export const statusBadgeVariant: Record<UserStatus, NonNullable<BadgeProps["vari
   SUSPENDED: "destructive",
   PENDING_PASSWORD_CHANGE: "outline",
   ARCHIVED: "outline",
+  LOCKED: "destructive",
 };
 
 export const roleLabels: Record<UserRole, string> = {
@@ -38,6 +40,7 @@ export const allStatuses = [
   UserStatus.SUSPENDED,
   UserStatus.PENDING_PASSWORD_CHANGE,
   UserStatus.ARCHIVED,
+  UserStatus.LOCKED,
 ] as const;
 
 // Statuses an admin can set directly via the status menu - PENDING_PASSWORD_CHANGE
