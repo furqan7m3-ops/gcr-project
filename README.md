@@ -203,6 +203,69 @@ Everything under `/admin` is gated to `UserRole.ADMIN` at two layers - `src/prox
 
 **Security (`/admin/security`)** - account-status breakdown, the current password policy, and three drill-down pages: **Active Sessions** (every currently valid signed-in session, with a real "Terminate" action - JWTs are stateless, so this is backed by a `UserLoginSession` table keyed by a session id embedded in the JWT and checked on every request), **Failed Login Attempts** (every unsuccessful sign-in, with email/IP/device), and **Locked Accounts** (auto-locked after 5 consecutive failed attempts; unlock or force a password reset from here).
 
+### Admin manual testing walkthrough
+
+A step-by-step path through every admin area, in the order it was built. Sign in as `faizan.admin@gcr.dev` / `F@izan4121` unless a step says otherwise. Every mutation below writes a real database row and shows a toast - nothing here is mocked.
+
+**1. Access control**
+
+- Signed out, visit `/admin` directly - redirected to `/login`.
+- Signed in as the teacher or student seed account, visit `/admin` - redirected to `/dashboard?denied=admin` with an error toast; the **Admin** nav section is absent from their sidebar entirely.
+- Signed in as the admin, `/admin` loads the dashboard inside its own shell (separate header/sidebar from the teacher/student app, same design system).
+
+**2. Users (`/admin/users`)**
+
+- Use the search box and the role/status filter dropdowns together, then click a column header to sort - the URL updates with `?q=`/`?role=`/`?status=`/`?sort=` and the table re-renders server-side.
+- Click **Create user**, fill in name/email/role, submit - a one-time temporary-password dialog appears; copy it.
+- Sign in as that new user with the temp password - you land on `/change-password` immediately (a new admin-created account always requires setting its own password first), not `/dashboard`.
+- Back as admin, open a user's **⋮** menu: **Edit** (change name/email/role - changing role alone logs a different audit event than changing name/email, see step 7), **Reset password** (new temp password, same one-time dialog), **Force password change** (no new password yet, but their next sign-in redirects to `/change-password` the same way), and status changes (**Deactivate**/**Suspend**/**Archive**, each behind a confirmation dialog, plus **Reactivate** once inactive).
+- Try deactivating or changing the role of your own admin account - it's blocked with an inline error (`CANNOT_MODIFY_SELF`); every other admin action can target any account, including other admins.
+
+**3. Classrooms (`/admin/classrooms`)**
+
+- The table lists every classroom platform-wide, not just ones you belong to - search/filter/sort/pagination work the same way as Users.
+- Open **View details** on "Advanced Mathematics 101" - a side panel shows member/teacher/student counts, assignment/announcement/material/submission counts, and the full roster.
+- **Archive** it (confirmation dialog first) - it disappears from the teacher's/students' classroom lists; **Restore** brings it back.
+- **Transfer ownership** by typing another user's email (e.g. a student's) - that user becomes OWNER, the previous owner is downgraded to TEACHER.
+- **Assign teacher** by email - adds that user as a TEACHER member without touching the owner.
+- **Delete** (soft-delete) - same visual effect as Archive from the classroom's perspective, but tracked as a distinct action in the audit log.
+
+**4. Moderation (`/admin/moderation`)**
+
+- Switch the **Content type** dropdown between Announcements / Comments / Materials / Assignments - each renders its own columns (comments show a truncated content preview instead of a title).
+- Pick any item's **⋮** menu: **Archive**, **Delete**, or **Restore** (whichever apply to its current status) - each requires confirming first, then the item's status badge updates and it disappears from the classroom it came from.
+- Filter by status (Active/Archived/Deleted) to find something to restore after archiving/deleting it.
+
+**5. Reports (`/admin/reports`)**
+
+- The dashboard shows the same stat tiles as `/admin`, plus a 12-week platform-growth line chart (users + classrooms created per week) and a recent-activity feed.
+- Follow the six report cards at the bottom into their own pages: **Teacher Activity**, **Student Activity**, **Assignment Completion**, **Submission Rates**, **Classroom Activity**, **Inactive Users**. Each supports search, a relevant filter (e.g. classroom or status), and click-to-sort column headers, independent of the others.
+- On **Inactive Users**, lower the "days inactive" threshold to `0` - every seeded account (all created moments apart) should now appear, since none of them are older than that.
+
+**6. Audit Logs (`/admin/audit-logs`)**
+
+- After doing steps 2-4 above, open this page - you should see one row per action you just took (e.g. "User Created", "Role Changed", "Classroom Archived", "Assignment Deleted"), each with a timestamp, the admin as Actor, and a human-readable Target (a user's "Name (email)", a classroom's title, a content item's title/preview).
+- Filter by one exact event type via the dropdown, or search by actor/target text - pagination applies once you have more rows than fit on one page.
+- Note what's deliberately _not_ here: ordinary classroom activity like a student joining or submitting work lives in the same underlying table but is excluded from this view - only the fixed set of administrative events counts.
+
+**7. Settings (`/admin/settings`)**
+
+- Change **Platform name** and save - confirm it now shows in both the teacher/student app header and the admin header, and in the browser tab title.
+- Toggle a **Default classroom setting** (e.g. turn off "Allow materials") and save, then create a new classroom (as the teacher, or via admin/classrooms is view-only for creation) - the new classroom's settings should reflect the value you just changed, not the old default.
+- Tighten the **Password policy** (e.g. require a symbol, raise the minimum length) and save, then go to `/change-password` as any signed-in user and try a password that violates the new rule - it's rejected with the specific requirement that's missing.
+
+**8. Security (`/admin/security`)**
+
+- The overview shows live counts: active sessions, locked accounts, failed attempts in the last 24 hours, and the current password policy.
+- Open **Active sessions** - your own current session is listed with its IP/device and expiry. Sign in as another seed account in a second browser (or incognito), find that session here, and **Terminate** it - the other browser gets signed out on its very next request (try refreshing it).
+- Deliberately fail a sign-in 5 times in a row for one account (wrong password each time) - the 6th attempt fails even with the _correct_ password, because the account is now locked. Confirm it under **Locked accounts**.
+- From **Locked accounts**, either **Unlock** it (sign-in works again immediately) or **Force a password reset** (generates a new temporary password and also clears the lock).
+- Open **Failed login attempts** - your 5 deliberate failures (plus the 6th "correct password, still locked" one) are all listed with timestamps.
+
+**9. Cross-check with Audit Logs**
+
+- Go back to `/admin/audit-logs` - the lock from step 8 shows as "Account Locked" (attributed to the locked account itself, since it was system-triggered by its own failed attempts, not by an admin), and your unlock/terminate/reset actions each show up as their own event, all attributed to you as the actor.
+
 ## Docker Setup
 
 PostgreSQL runs inside Docker so developers do not need to install or configure a local database. The application itself runs on the host machine.
