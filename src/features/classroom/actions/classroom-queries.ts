@@ -11,6 +11,11 @@ export async function getUserClassroomsAction(): Promise<ClassroomSummary[]> {
   return classroomService.listUserClassrooms(user.id);
 }
 
+export async function getArchivedClassroomsAction(): Promise<ClassroomSummary[]> {
+  const user = await requireUser();
+  return classroomService.listArchivedClassrooms(user);
+}
+
 export async function getClassroomByIdAction(
   classroomId: string,
 ): Promise<ClassroomSummary | null> {

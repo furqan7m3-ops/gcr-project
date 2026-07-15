@@ -196,6 +196,39 @@ export async function listUserClassrooms(userId: string): Promise<ClassroomSumma
   return memberships.map((membership) => toClassroomSummary(membership.classroom, membership.role));
 }
 
+/**
+ * Archived classrooms only - backs the "Archived classes" nav item. Platform
+ * admins bypass membership and see every archived classroom, matching the
+ * same ADMIN-bypass convention used by getClassroomForUser (a synthetic
+ * TEACHER role, since admins aren't classroom members) and by the review
+ * queue's manageable-classroom lookup.
+ */
+export async function listArchivedClassrooms(user: SessionUser): Promise<ClassroomSummary[]> {
+  if (user.role === UserRole.ADMIN) {
+    const classrooms = await prisma.classroom.findMany({
+      where: { status: ClassroomStatus.ARCHIVED },
+      include: classroomWithOwnerInclude(),
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return classrooms.map((classroom) =>
+      toClassroomSummary(classroom, ClassroomMembershipRole.TEACHER),
+    );
+  }
+
+  const memberships = await prisma.classroomMembership.findMany({
+    where: {
+      userId: user.id,
+      status: ClassroomMembershipStatus.ACTIVE,
+      classroom: { status: ClassroomStatus.ARCHIVED },
+    },
+    include: { classroom: { include: classroomWithOwnerInclude() } },
+    orderBy: { classroom: { updatedAt: "desc" } },
+  });
+
+  return memberships.map((membership) => toClassroomSummary(membership.classroom, membership.role));
+}
+
 export async function getClassroomForUser(
   classroomId: string,
   user: SessionUser,
