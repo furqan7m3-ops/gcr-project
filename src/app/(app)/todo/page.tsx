@@ -1,0 +1,31 @@
+import { PageContainer } from "@/components/page/page-container";
+import { SectionHeader } from "@/components/page/section-header";
+
+import { TodoBoard } from "@/features/todo/components/todo-board";
+import { TodoClassroomFilter } from "@/features/todo/components/todo-classroom-filter";
+import { getTodoBoard, getTodoClassroomOptions } from "@/features/todo/queries/todo-queries";
+
+interface PageProps {
+  searchParams: Promise<{ classroomId?: string }>;
+}
+
+export default async function TodoPage({ searchParams }: PageProps) {
+  const resolved = await searchParams;
+  const classroomId = resolved.classroomId?.trim() || undefined;
+
+  const [items, classrooms] = await Promise.all([
+    getTodoBoard({ classroomId }),
+    getTodoClassroomOptions(),
+  ]);
+
+  return (
+    <PageContainer>
+      <SectionHeader
+        title="To-do"
+        description="Assignments across all your classes, organized by status."
+      />
+      <TodoClassroomFilter classrooms={classrooms} classroomId={classroomId} />
+      <TodoBoard items={items} />
+    </PageContainer>
+  );
+}

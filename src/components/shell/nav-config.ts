@@ -5,6 +5,7 @@ import {
   Bell,
   BookOpen,
   Calendar,
+  ClipboardCheck,
   ClipboardList,
   Home,
   LockKeyhole,
@@ -36,6 +37,12 @@ export const navSections: NavSection[] = [
       { label: "Home", href: "/dashboard", icon: Home },
       { label: "Notifications", href: "/notifications", icon: Bell },
       { label: "Calendar", href: "/calendar", icon: Calendar },
+      {
+        label: "To-do",
+        href: "/todo",
+        icon: ClipboardCheck,
+        roles: [UserRole.STUDENT],
+      },
       {
         label: "To review",
         href: "/review",

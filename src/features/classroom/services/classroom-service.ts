@@ -266,6 +266,28 @@ export async function listActiveClassroomIds(userId: string): Promise<string[]> 
   return memberships.map((membership) => membership.classroomId);
 }
 
+/**
+ * Same scoping as listActiveClassroomIds (active membership, active
+ * classroom - archived classrooms excluded), just with a title alongside
+ * each id. Backs the Student To-do page's "All Classes" filter dropdown, in
+ * one query rather than ids-then-a-second-lookup.
+ */
+export async function listActiveClassroomsForUser(
+  userId: string,
+): Promise<{ id: string; title: string }[]> {
+  const memberships = await prisma.classroomMembership.findMany({
+    where: {
+      userId,
+      status: ClassroomMembershipStatus.ACTIVE,
+      classroom: { status: ClassroomStatus.ACTIVE },
+    },
+    select: { classroom: { select: { id: true, title: true } } },
+    orderBy: { classroom: { title: "asc" } },
+  });
+
+  return memberships.map((membership) => membership.classroom);
+}
+
 export interface ClassroomSearchScope {
   /** Classrooms this user manages - full visibility, including drafts/scheduled content. */
   manageableClassroomIds: string[];

@@ -1,4 +1,5 @@
-import { Archive, BookOpen } from "lucide-react";
+import Link from "next/link";
+import { Archive, ArrowRight, BookOpen } from "lucide-react";
 
 import { StatGrid } from "@/components/page/dashboard-grid";
 import { StatCard } from "@/components/page/stat-card";
@@ -16,7 +17,15 @@ export function StudentDashboardView({ data }: { data: StudentDashboardData }) {
       </StatGrid>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-foreground">Upcoming deadlines</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">Upcoming deadlines</h2>
+          <Link
+            href="/todo"
+            className="flex items-center gap-1 text-sm text-primary hover:underline"
+          >
+            View To-do <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
         <UpcomingDeadlinesList items={data.upcomingDeadlines} />
       </section>
 
