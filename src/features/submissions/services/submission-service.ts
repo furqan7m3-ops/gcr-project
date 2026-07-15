@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { SessionUser } from "@/auth/session";
 import {
   assertClassroomActive,
@@ -13,6 +11,7 @@ import {
 } from "@/features/notifications/services/notification-generator";
 import { getFileAttachmentsByEntityIds, type AttachedFileSummary } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
+import { deleteAttachment, uploadAttachments } from "@/lib/storage/file-service";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   AssignmentStatus,
@@ -33,12 +32,6 @@ import type {
   SubmissionReviewDetail,
   SubmissionView,
 } from "../types";
-
-export interface FileMeta {
-  fileName: string;
-  mimeType: string;
-  size: number;
-}
 
 export interface SubmissionInput {
   textAnswer?: string;
@@ -148,35 +141,22 @@ async function upsertSubmissionRow(
 async function attachFiles(
   tx: Prisma.TransactionClient,
   submissionId: string,
-  fileMetas: FileMeta[],
+  files: File[],
   uploadedById: string,
 ): Promise<void> {
-  for (const fileMeta of fileMetas) {
-    // No object storage is wired up yet - this records file metadata only.
-    const file = await tx.file.create({
-      data: {
-        storagePath: `metadata-only/${randomUUID()}/${fileMeta.fileName}`,
-        fileName: fileMeta.fileName,
-        mimeType: fileMeta.mimeType || "application/octet-stream",
-        size: fileMeta.size,
-        uploadedById,
-      },
-    });
-
-    await tx.fileAttachment.create({
-      data: {
-        fileId: file.id,
-        attachmentType: FileAttachmentType.SUBMISSION,
-        entityId: submissionId,
-      },
-    });
-  }
+  await uploadAttachments({
+    files,
+    attachmentType: FileAttachmentType.SUBMISSION,
+    entityId: submissionId,
+    uploadedById,
+    tx,
+  });
 }
 
 function toSubmissionView(
   submission: SubmissionRow | null,
   assignment: AssignmentContext,
-  attachments: { id: string; fileName: string }[],
+  attachments: AttachedFileSummary[],
 ): SubmissionView {
   if (!submission) {
     return { submission: null, canEdit: true, canUnsubmit: false };
@@ -242,7 +222,7 @@ export async function createOrUpdateSubmission(
   assignmentId: string,
   user: SessionUser,
   input: SubmissionInput,
-  fileMetas: FileMeta[],
+  files: File[],
 ): Promise<SubmissionView> {
   const assignment = await loadAssignmentContext(assignmentId);
   await assertStudentEligibility(assignment.classroomId, user);
@@ -264,7 +244,7 @@ export async function createOrUpdateSubmission(
       submittedAt: null,
     });
 
-    await attachFiles(tx, row.id, fileMetas, user.id);
+    await attachFiles(tx, row.id, files, user.id);
 
     return row;
   });
@@ -284,7 +264,7 @@ export async function submitSubmission(
   assignmentId: string,
   user: SessionUser,
   input: SubmissionInput,
-  fileMetas: FileMeta[],
+  files: File[],
 ): Promise<SubmissionView> {
   const assignment = await loadAssignmentContext(assignmentId);
   await assertStudentEligibility(assignment.classroomId, user);
@@ -318,7 +298,7 @@ export async function submitSubmission(
       submittedAt: now,
     });
 
-    await attachFiles(tx, row.id, fileMetas, user.id);
+    await attachFiles(tx, row.id, files, user.id);
 
     return row;
   });
@@ -418,7 +398,7 @@ export async function removeSubmissionAttachment(
     throw new ClassroomServiceError("NOT_FOUND", "Attachment not found.");
   }
 
-  await prisma.fileAttachment.delete({ where: { id: fileAttachmentId } });
+  await deleteAttachment(fileAttachmentId);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { SessionUser } from "@/auth/session";
 import {
   assertClassroomActive,
@@ -11,6 +9,7 @@ import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { notifyMaterialPublished } from "@/features/notifications/services/notification-generator";
 import { getFileAttachmentsByEntityIds } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
+import { deleteAttachment, uploadAttachments } from "@/lib/storage/file-service";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   ClassroomStatus,
@@ -24,12 +23,6 @@ import { assertTopicBelongsToClassroom } from "./topic-service";
 import type { MaterialAttachedFile, MaterialSummary } from "../types";
 
 const VIDEO_URL_PATTERN = /(youtube\.com|youtu\.be|vimeo\.com)/i;
-
-export interface FileMeta {
-  fileName: string;
-  mimeType: string;
-  size: number;
-}
 
 export interface MaterialInput {
   title: string;
@@ -75,13 +68,13 @@ function toMaterialSummary(
 
 // Type is inferred from what's attached, matching Google Classroom's own UX
 // (there's no explicit "type" field for the teacher to fill in).
-function deriveMaterialType(url: string | undefined, fileMetas: FileMeta[]): MaterialType {
+function deriveMaterialType(url: string | undefined, files: File[]): MaterialType {
   if (url) {
     return VIDEO_URL_PATTERN.test(url) ? MaterialType.VIDEO : MaterialType.LINK;
   }
 
-  if (fileMetas.length > 0) {
-    return fileMetas.every((file) => file.mimeType.startsWith("image/"))
+  if (files.length > 0) {
+    return files.every((file) => file.type.startsWith("image/"))
       ? MaterialType.IMAGE
       : MaterialType.DOCUMENT;
   }
@@ -138,7 +131,7 @@ export async function createMaterial(
   classroomId: string,
   user: SessionUser,
   input: MaterialInput,
-  fileMetas: FileMeta[],
+  files: File[],
   status:
     | typeof MaterialStatus.DRAFT
     | typeof MaterialStatus.SCHEDULED
@@ -159,7 +152,7 @@ export async function createMaterial(
     await assertTopicBelongsToClassroom(input.topicId, classroomId);
   }
 
-  const type = deriveMaterialType(input.url, fileMetas);
+  const type = deriveMaterialType(input.url, files);
 
   const created = await prisma.$transaction(async (tx) => {
     const material = await tx.material.create({
@@ -179,27 +172,13 @@ export async function createMaterial(
       include: materialWithAuthorInclude(),
     });
 
-    for (const fileMeta of fileMetas) {
-      // No object storage is wired up yet (see docs/ui-architecture.md open questions) -
-      // this records file metadata only, not the file's bytes.
-      const file = await tx.file.create({
-        data: {
-          storagePath: `metadata-only/${randomUUID()}/${fileMeta.fileName}`,
-          fileName: fileMeta.fileName,
-          mimeType: fileMeta.mimeType || "application/octet-stream",
-          size: fileMeta.size,
-          uploadedById: user.id,
-        },
-      });
-
-      await tx.fileAttachment.create({
-        data: {
-          fileId: file.id,
-          attachmentType: FileAttachmentType.MATERIAL,
-          entityId: material.id,
-        },
-      });
-    }
+    await uploadAttachments({
+      files,
+      attachmentType: FileAttachmentType.MATERIAL,
+      entityId: material.id,
+      uploadedById: user.id,
+      tx,
+    });
 
     return material;
   });
@@ -224,6 +203,7 @@ export async function updateMaterial(
   materialId: string,
   user: SessionUser,
   input: MaterialInput,
+  files: File[] = [],
 ): Promise<MaterialSummary> {
   const existing = await findActiveMaterialOrThrow(materialId);
   assertClassroomActive(
@@ -243,11 +223,45 @@ export async function updateMaterial(
     topic: input.topicId ? { connect: { id: input.topicId } } : { disconnect: true },
   });
 
+  // Editing only ever adds new attachments here - removing an existing one is
+  // its own explicit action (removeMaterialAttachment), matching the pattern
+  // already used for submission attachments.
+  await uploadAttachments({
+    files,
+    attachmentType: FileAttachmentType.MATERIAL,
+    entityId: materialId,
+    uploadedById: user.id,
+  });
+
   const attachmentsByMaterialId = await getFileAttachmentsByEntityIds(
     [materialId],
     FileAttachmentType.MATERIAL,
   );
   return toMaterialSummary(updated, attachmentsByMaterialId.get(materialId) ?? [], true);
+}
+
+export async function removeMaterialAttachment(
+  materialId: string,
+  fileAttachmentId: string,
+  user: SessionUser,
+): Promise<void> {
+  const existing = await findActiveMaterialOrThrow(materialId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be edited.",
+  );
+  await assertManagementAccess(existing.classroomId, user);
+
+  const attachment = await prisma.fileAttachment.findUnique({ where: { id: fileAttachmentId } });
+  if (
+    !attachment ||
+    attachment.attachmentType !== FileAttachmentType.MATERIAL ||
+    attachment.entityId !== materialId
+  ) {
+    throw new ClassroomServiceError("NOT_FOUND", "Attachment not found.");
+  }
+
+  await deleteAttachment(fileAttachmentId);
 }
 
 export async function deleteMaterial(materialId: string, user: SessionUser): Promise<void> {

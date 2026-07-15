@@ -7,6 +7,11 @@ const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().optional(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  // Selects the StorageProvider implementation (see src/lib/storage) - "local"
+  // (development default) is the only driver today; a future cloud backend
+  // adds itself as another enum value here and a matching case in
+  // getStorageProvider(), nothing else in the app needs to change.
+  STORAGE_DRIVER: z.enum(["local"]).default("local"),
 });
 
 export const env = envSchema.parse(process.env);

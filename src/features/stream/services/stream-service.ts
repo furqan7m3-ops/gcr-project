@@ -11,6 +11,7 @@ import { notifyAnnouncementPublished } from "@/features/notifications/services/n
 import { recordAuditEvent } from "@/lib/audit-log";
 import { getFileAttachmentsByEntityIds } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
+import { deleteAttachment, uploadAttachments } from "@/lib/storage/file-service";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   ActivityAction,
@@ -39,8 +40,11 @@ function announcementWithRelationsInclude() {
   } as const;
 }
 
-async function createAnnouncementRecord(data: Prisma.AnnouncementCreateArgs["data"]) {
-  return prisma.announcement.create({ data, include: announcementWithRelationsInclude() });
+async function createAnnouncementRecord(
+  data: Prisma.AnnouncementCreateArgs["data"],
+  client: typeof prisma | Prisma.TransactionClient = prisma,
+) {
+  return client.announcement.create({ data, include: announcementWithRelationsInclude() });
 }
 
 type AnnouncementWithRelations = Awaited<ReturnType<typeof createAnnouncementRecord>>;
@@ -167,6 +171,7 @@ export async function createAnnouncement(
     | typeof AnnouncementStatus.SCHEDULED
     | typeof AnnouncementStatus.PUBLISHED,
   scheduledFor: Date | null,
+  files: File[] = [],
 ): Promise<AnnouncementSummary> {
   const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
 
@@ -180,15 +185,30 @@ export async function createAnnouncement(
   // teach this specific classroom can't post to it.
   await assertManagementAccess(classroomId, user);
 
-  const created = await createAnnouncementRecord({
-    classroomId,
-    authorId: user.id,
-    title: deriveTitleFromContent(content),
-    content,
-    status,
-    scheduledFor: status === AnnouncementStatus.SCHEDULED ? scheduledFor : null,
-    publishedAt: status === AnnouncementStatus.PUBLISHED ? new Date() : null,
-    publishedById: status === AnnouncementStatus.PUBLISHED ? user.id : null,
+  const created = await prisma.$transaction(async (tx) => {
+    const announcement = await createAnnouncementRecord(
+      {
+        classroomId,
+        authorId: user.id,
+        title: deriveTitleFromContent(content),
+        content,
+        status,
+        scheduledFor: status === AnnouncementStatus.SCHEDULED ? scheduledFor : null,
+        publishedAt: status === AnnouncementStatus.PUBLISHED ? new Date() : null,
+        publishedById: status === AnnouncementStatus.PUBLISHED ? user.id : null,
+      },
+      tx,
+    );
+
+    await uploadAttachments({
+      files,
+      attachmentType: FileAttachmentType.ANNOUNCEMENT,
+      entityId: announcement.id,
+      uploadedById: user.id,
+      tx,
+    });
+
+    return announcement;
   });
 
   if (status === AnnouncementStatus.PUBLISHED) {
@@ -200,13 +220,23 @@ export async function createAnnouncement(
     });
   }
 
-  return toAnnouncementSummary(created, [], user.id, true);
+  const attachmentsByAnnouncementId = await getFileAttachmentsByEntityIds(
+    [created.id],
+    FileAttachmentType.ANNOUNCEMENT,
+  );
+  return toAnnouncementSummary(
+    created,
+    attachmentsByAnnouncementId.get(created.id) ?? [],
+    user.id,
+    true,
+  );
 }
 
 export async function updateAnnouncement(
   announcementId: string,
   user: SessionUser,
   content: string,
+  files: File[] = [],
 ): Promise<AnnouncementSummary> {
   const existing = await findActiveAnnouncementOrThrow(announcementId);
   assertClassroomActive(
@@ -224,6 +254,15 @@ export async function updateAnnouncement(
     include: announcementWithRelationsInclude(),
   });
 
+  // Editing only ever adds new attachments here - removing an existing one is
+  // its own explicit action (removeAnnouncementAttachment).
+  await uploadAttachments({
+    files,
+    attachmentType: FileAttachmentType.ANNOUNCEMENT,
+    entityId: announcementId,
+    uploadedById: user.id,
+  });
+
   const attachmentsByAnnouncementId = await getFileAttachmentsByEntityIds(
     [announcementId],
     FileAttachmentType.ANNOUNCEMENT,
@@ -234,6 +273,30 @@ export async function updateAnnouncement(
     user.id,
     true,
   );
+}
+
+export async function removeAnnouncementAttachment(
+  announcementId: string,
+  fileAttachmentId: string,
+  user: SessionUser,
+): Promise<void> {
+  const existing = await findActiveAnnouncementOrThrow(announcementId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be edited.",
+  );
+  await assertManagementAccess(existing.classroomId, user);
+
+  const attachment = await prisma.fileAttachment.findUnique({ where: { id: fileAttachmentId } });
+  if (
+    !attachment ||
+    attachment.attachmentType !== FileAttachmentType.ANNOUNCEMENT ||
+    attachment.entityId !== announcementId
+  ) {
+    throw new ClassroomServiceError("NOT_FOUND", "Attachment not found.");
+  }
+
+  await deleteAttachment(fileAttachmentId);
 }
 
 export async function deleteAnnouncement(announcementId: string, user: SessionUser): Promise<void> {

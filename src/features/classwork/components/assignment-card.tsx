@@ -2,11 +2,11 @@ import Link from "next/link";
 import { Award, CalendarClock, ClipboardList } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { AttachmentList } from "@/components/files/attachment-list";
 import { ContentStatusBadge } from "@/features/scheduling/components/content-status-badge";
 
 import { formatDueDate } from "../lib/format-assignment";
 import type { AssignmentSummary, TopicSummary } from "../types";
-import { AssignmentAttachments } from "./assignment-attachments";
 import { AssignmentManagementMenu } from "./assignment-management-menu";
 
 interface AssignmentCardProps {
@@ -55,9 +55,9 @@ export function AssignmentCard({ assignment, classroomId, topics }: AssignmentCa
             ) : null}
           </div>
 
-          <AssignmentAttachments
+          <AttachmentList
             attachments={assignment.attachments}
-            className="mt-1 flex flex-col gap-1"
+            className="mt-1 flex flex-col gap-1.5"
           />
 
           <p className="text-xs text-muted-foreground">{assignment.authorName}</p>

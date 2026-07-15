@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { AttachmentUploadField } from "@/components/files/attachment-upload-field";
 import {
   PublishControls,
   type PublishMode,
@@ -65,6 +66,8 @@ export function AnnouncementComposer({ classroomId }: { classroomId: string }) {
           {fieldErrors?.content ? (
             <p className="text-xs text-destructive">{fieldErrors.content[0]}</p>
           ) : null}
+
+          <AttachmentUploadField id="announcement-files" disabled={isPending} />
 
           <PublishControls
             mode={publishMode}

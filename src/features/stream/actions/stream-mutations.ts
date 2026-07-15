@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { AuthError, requireUser } from "@/lib/auth/permissions";
+import { extractUploadedFiles } from "@/lib/storage/extract-files";
+import { FileValidationBatchError } from "@/lib/storage/file-service";
 import { AnnouncementStatus } from "@/generated/prisma/enums";
 
 import * as streamService from "../services/stream-service";
@@ -25,6 +27,10 @@ function formDataToObject(formData: FormData): Record<string, string> {
 }
 
 function toErrorResult<T>(error: unknown, fallbackMessage: string): ActionResult<T> {
+  if (error instanceof FileValidationBatchError) {
+    return { status: "error", message: error.message };
+  }
+
   if (error instanceof AuthError || error instanceof ClassroomServiceError) {
     return { status: "error", message: error.message };
   }
@@ -55,6 +61,7 @@ export async function createAnnouncementAction(
       parsed.data.content,
       STATUS_MAP[parsed.data.status],
       parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null,
+      extractUploadedFiles(formData),
     );
     revalidatePath(`/classes/${parsed.data.classroomId}/stream`);
 
@@ -84,6 +91,7 @@ export async function updateAnnouncementAction(
       parsed.data.announcementId,
       user,
       parsed.data.content,
+      extractUploadedFiles(formData),
     );
     revalidatePath(`/classes/${parsed.data.classroomId}/stream`);
 
@@ -142,5 +150,31 @@ export async function setAnnouncementPinnedAction(
         ? "Couldn't pin the announcement. Please try again."
         : "Couldn't unpin the announcement. Please try again.",
     );
+  }
+}
+
+export async function removeAnnouncementAttachmentAction(
+  classroomId: string,
+  announcementId: string,
+  fileAttachmentId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const user = await requireUser();
+
+    const parsed = announcementIdSchema.safeParse({ announcementId });
+    if (!parsed.success) {
+      return { status: "error", message: "Invalid announcement." };
+    }
+
+    await streamService.removeAnnouncementAttachment(
+      parsed.data.announcementId,
+      fileAttachmentId,
+      user,
+    );
+    revalidatePath(`/classes/${classroomId}/stream`);
+
+    return { status: "success", data: undefined };
+  } catch (error) {
+    return toErrorResult(error, "Couldn't remove that attachment. Please try again.");
   }
 }

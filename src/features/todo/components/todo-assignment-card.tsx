@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Award, CalendarClock, ClipboardList } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { AssignmentAttachments } from "@/features/classwork/components/assignment-attachments";
+import { AttachmentList } from "@/components/files/attachment-list";
 import { formatDueDate } from "@/features/classwork/lib/format-assignment";
 import { ContentStatusBadge } from "@/features/scheduling/components/content-status-badge";
 import { SubmissionStatusBadge } from "@/features/submissions/components/submission-status-badge";
@@ -11,9 +11,9 @@ import type { TodoAssignmentItem } from "../types";
 
 /**
  * Mirrors AssignmentCard's layout (same icon circle, due-date/points row,
- * and AssignmentAttachments reuse) with two additions this cross-classroom
- * list needs that a single-classroom card doesn't: the classroom name, and
- * the student's own submission status badge (reusing the same
+ * and AttachmentList reuse) with two additions this cross-classroom list
+ * needs that a single-classroom card doesn't: the classroom name, and the
+ * student's own submission status badge (reusing the same
  * SubmissionStatusBadge/ContentStatusBadge components used everywhere else,
  * not new ones).
  */
@@ -56,10 +56,7 @@ export function TodoAssignmentCard({ item }: { item: TodoAssignmentItem }) {
             ) : null}
           </div>
 
-          <AssignmentAttachments
-            attachments={item.attachments}
-            className="mt-1 flex flex-col gap-1"
-          />
+          <AttachmentList attachments={item.attachments} className="mt-1 flex flex-col gap-1.5" />
         </div>
       </CardContent>
     </Card>

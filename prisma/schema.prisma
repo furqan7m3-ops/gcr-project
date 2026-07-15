@@ -531,15 +531,20 @@ model Notification {
 }
 
 model File {
-  id           String   @id @default(uuid()) @db.Uuid
-  storagePath  String
-  fileName     String
-  mimeType     String
-  size         Int
-  uploadedById String   @db.Uuid
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  deletedAt    DateTime?
+  id              String   @id @default(uuid()) @db.Uuid
+  storagePath     String
+  // Which StorageProvider wrote this file ("local" today; "s3"/"r2"/"supabase"/
+  // "azure-blob"/"gcs" once a cloud provider is added) - lets a mixed fleet of
+  // old and newly-migrated records coexist during a future storage migration,
+  // since the provider that can actually read a given storagePath depends on it.
+  storageProvider String   @default("local")
+  fileName        String
+  mimeType        String
+  size            Int
+  uploadedById    String   @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
 
   // File metadata is stored in the database while the actual binary content lives in external storage.
   uploadedBy   User     @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: Restrict)

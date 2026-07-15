@@ -12,7 +12,7 @@ import {
   materialIdSchema,
   updateMaterialSchema,
 } from "../validation/material-schema";
-import { extractFileMetas, formDataToObject, toErrorResult } from "./shared";
+import { extractUploadedFiles, formDataToObject, toErrorResult } from "./shared";
 
 const STATUS_MAP = {
   DRAFT: MaterialStatus.DRAFT,
@@ -45,7 +45,7 @@ export async function createMaterialAction(
         url: parsed.data.url,
         topicId: parsed.data.topicId,
       },
-      extractFileMetas(formData),
+      extractUploadedFiles(formData),
       STATUS_MAP[parsed.data.status],
       parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null,
     );
@@ -73,12 +73,17 @@ export async function updateMaterialAction(
       };
     }
 
-    const material = await materialService.updateMaterial(parsed.data.materialId, user, {
-      title: parsed.data.title,
-      description: parsed.data.description,
-      url: parsed.data.url,
-      topicId: parsed.data.topicId,
-    });
+    const material = await materialService.updateMaterial(
+      parsed.data.materialId,
+      user,
+      {
+        title: parsed.data.title,
+        description: parsed.data.description,
+        url: parsed.data.url,
+        topicId: parsed.data.topicId,
+      },
+      extractUploadedFiles(formData),
+    );
     revalidatePath(`/classes/${parsed.data.classroomId}/classwork`);
 
     return { status: "success", data: material };
@@ -105,5 +110,27 @@ export async function deleteMaterialAction(
     return { status: "success", data: undefined };
   } catch (error) {
     return toErrorResult(error, "Couldn't delete the material. Please try again.");
+  }
+}
+
+export async function removeMaterialAttachmentAction(
+  classroomId: string,
+  materialId: string,
+  fileAttachmentId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const user = await requireUser();
+
+    const parsed = materialIdSchema.safeParse({ materialId });
+    if (!parsed.success) {
+      return { status: "error", message: "Invalid material." };
+    }
+
+    await materialService.removeMaterialAttachment(parsed.data.materialId, fileAttachmentId, user);
+    revalidatePath(`/classes/${classroomId}/classwork`);
+
+    return { status: "success", data: undefined };
+  } catch (error) {
+    return toErrorResult(error, "Couldn't remove that attachment. Please try again.");
   }
 }

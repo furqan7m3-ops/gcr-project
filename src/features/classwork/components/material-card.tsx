@@ -2,6 +2,7 @@ import { ExternalLink, FileText, ImageIcon, Link2, Paperclip, Video } from "luci
 import type { LucideIcon } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { AttachmentList } from "@/components/files/attachment-list";
 import { MaterialType } from "@/generated/prisma/enums";
 import { ContentStatusBadge } from "@/features/scheduling/components/content-status-badge";
 
@@ -51,20 +52,10 @@ export function MaterialCard({ material, classroomId, topics }: MaterialCardProp
               <span className="truncate">{material.url}</span>
             </a>
           ) : null}
-          {material.attachments.length > 0 ? (
-            <div className="mt-1 flex flex-col gap-1">
-              {material.attachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                  title="File contents aren't stored yet - this is metadata only."
-                >
-                  <Paperclip className="h-3 w-3 shrink-0" aria-hidden />
-                  <span className="truncate">{attachment.fileName}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          <AttachmentList
+            attachments={material.attachments}
+            className="mt-1 flex flex-col gap-1.5"
+          />
           <p className="text-xs text-muted-foreground">{material.authorName}</p>
         </div>
 

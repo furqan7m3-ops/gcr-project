@@ -6,7 +6,7 @@ import { SectionHeader } from "@/components/page/section-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getClassroomByIdAction } from "@/features/classroom/actions/classroom-queries";
-import { AssignmentAttachments } from "@/features/classwork/components/assignment-attachments";
+import { AttachmentList } from "@/components/files/attachment-list";
 import { AssignmentManagementMenu } from "@/features/classwork/components/assignment-management-menu";
 import { formatDueDate } from "@/features/classwork/lib/format-assignment";
 import { getAssignmentDetail } from "@/features/classwork/queries/assignment-queries";
@@ -141,7 +141,7 @@ export default async function AssignmentDetailPage({
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Attachments
                   </p>
-                  <AssignmentAttachments attachments={assignment.attachments} />
+                  <AttachmentList attachments={assignment.attachments} />
                 </div>
               ) : null}
             </CardContent>

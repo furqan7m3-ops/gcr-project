@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { SessionUser } from "@/auth/session";
 import {
   assertClassroomActive,
@@ -12,6 +10,7 @@ import { notifyAssignmentPublished } from "@/features/notifications/services/not
 import { recordAuditEvent } from "@/lib/audit-log";
 import { getFileAttachmentsByEntityIds, type AttachedFileSummary } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
+import { deleteAttachment, uploadAttachments } from "@/lib/storage/file-service";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   ActivityAction,
@@ -23,7 +22,6 @@ import type { ScheduleAdapter, SchedulableRecord } from "@/lib/scheduling/types"
 
 import { assertTopicBelongsToClassroom } from "./topic-service";
 import type { AssignmentSummary } from "../types";
-import type { FileMeta } from "./material-service";
 
 export interface AssignmentInput {
   title: string;
@@ -209,7 +207,7 @@ export async function createAssignment(
     | typeof AssignmentStatus.DRAFT
     | typeof AssignmentStatus.SCHEDULED
     | typeof AssignmentStatus.PUBLISHED,
-  fileMetas: FileMeta[],
+  files: File[],
   scheduledFor: Date | null = null,
 ): Promise<AssignmentSummary> {
   const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
@@ -244,26 +242,13 @@ export async function createAssignment(
       include: assignmentWithAuthorInclude(),
     });
 
-    for (const fileMeta of fileMetas) {
-      // No object storage is wired up yet - this records file metadata only.
-      const file = await tx.file.create({
-        data: {
-          storagePath: `metadata-only/${randomUUID()}/${fileMeta.fileName}`,
-          fileName: fileMeta.fileName,
-          mimeType: fileMeta.mimeType || "application/octet-stream",
-          size: fileMeta.size,
-          uploadedById: user.id,
-        },
-      });
-
-      await tx.fileAttachment.create({
-        data: {
-          fileId: file.id,
-          attachmentType: FileAttachmentType.ASSIGNMENT,
-          entityId: assignment.id,
-        },
-      });
-    }
+    await uploadAttachments({
+      files,
+      attachmentType: FileAttachmentType.ASSIGNMENT,
+      entityId: assignment.id,
+      uploadedById: user.id,
+      tx,
+    });
 
     return assignment;
   });
@@ -289,6 +274,7 @@ export async function updateAssignment(
   assignmentId: string,
   user: SessionUser,
   input: AssignmentInput,
+  files: File[] = [],
 ): Promise<AssignmentSummary> {
   const existing = await findActiveAssignmentOrThrow(assignmentId);
   assertClassroomActive(
@@ -309,11 +295,44 @@ export async function updateAssignment(
     topic: input.topicId ? { connect: { id: input.topicId } } : { disconnect: true },
   });
 
+  // Editing only ever adds new attachments here - removing an existing one is
+  // its own explicit action (removeAssignmentAttachment).
+  await uploadAttachments({
+    files,
+    attachmentType: FileAttachmentType.ASSIGNMENT,
+    entityId: assignmentId,
+    uploadedById: user.id,
+  });
+
   const attachmentsByAssignmentId = await getFileAttachmentsByEntityIds(
     [assignmentId],
     FileAttachmentType.ASSIGNMENT,
   );
   return toAssignmentSummary(updated, attachmentsByAssignmentId.get(assignmentId) ?? [], true);
+}
+
+export async function removeAssignmentAttachment(
+  assignmentId: string,
+  fileAttachmentId: string,
+  user: SessionUser,
+): Promise<void> {
+  const existing = await findActiveAssignmentOrThrow(assignmentId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be edited.",
+  );
+  await assertManagementAccess(existing.classroomId, user);
+
+  const attachment = await prisma.fileAttachment.findUnique({ where: { id: fileAttachmentId } });
+  if (
+    !attachment ||
+    attachment.attachmentType !== FileAttachmentType.ASSIGNMENT ||
+    attachment.entityId !== assignmentId
+  ) {
+    throw new ClassroomServiceError("NOT_FOUND", "Attachment not found.");
+  }
+
+  await deleteAttachment(fileAttachmentId);
 }
 
 // Publishing a draft/scheduled assignment immediately now goes through the

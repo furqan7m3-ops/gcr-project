@@ -20,7 +20,7 @@ import {
   studentSubmissionIdSchema,
   submissionMutationSchema,
 } from "../validation/submission-schema";
-import { extractFileMetas, formDataToObject, toErrorResult } from "./shared";
+import { extractUploadedFiles, formDataToObject, toErrorResult } from "./shared";
 
 function classworkPath(classroomId: string, assignmentId: string) {
   return `/classes/${classroomId}/classwork/${assignmentId}`;
@@ -58,7 +58,7 @@ export async function saveSubmissionDraftAction(
       parsed.data.assignmentId,
       user,
       { textAnswer: parsed.data.textAnswer },
-      extractFileMetas(formData),
+      extractUploadedFiles(formData),
     );
     revalidatePath(classworkPath(parsed.data.classroomId, parsed.data.assignmentId));
 
@@ -87,7 +87,7 @@ export async function submitAssignmentAction(
       parsed.data.assignmentId,
       user,
       { textAnswer: parsed.data.textAnswer },
-      extractFileMetas(formData),
+      extractUploadedFiles(formData),
     );
     revalidatePath(classworkPath(parsed.data.classroomId, parsed.data.assignmentId));
 

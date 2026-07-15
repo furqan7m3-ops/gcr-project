@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Paperclip } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AttachmentList } from "@/components/files/attachment-list";
 import { usePendingAction } from "@/hooks/use-pending-action";
+import { UPLOAD_ACCEPT_ATTRIBUTE } from "@/lib/storage/validation";
 
 import {
   removeSubmissionAttachmentAction,
@@ -234,12 +236,13 @@ export function SubmissionPanel({
                   id="submission-files"
                   type="file"
                   multiple
+                  accept={UPLOAD_ACCEPT_ATTRIBUTE}
                   onChange={handleFilesSelected}
                   disabled={isBusy}
                   className="text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-secondary-foreground"
                 />
                 <p className="text-xs text-muted-foreground">
-                  File names are recorded now; storing file contents isn&apos;t wired up yet.
+                  PDF, Word, PowerPoint, Excel, text, ZIP, images, and videos - up to 25MB each.
                 </p>
               </div>
 
@@ -262,21 +265,8 @@ export function SubmissionPanel({
                 <p className="text-sm text-muted-foreground">No text response.</p>
               )}
 
-              {view.submission && view.submission.attachments.length > 0 ? (
-                <div className="flex flex-col gap-1.5">
-                  {view.submission.attachments.map((attachment) => (
-                    <div
-                      key={attachment.id}
-                      className="flex items-center gap-1.5 text-sm text-foreground"
-                    >
-                      <Paperclip
-                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                        aria-hidden
-                      />
-                      <span className="truncate">{attachment.fileName}</span>
-                    </div>
-                  ))}
-                </div>
+              {view.submission ? (
+                <AttachmentList attachments={view.submission.attachments} />
               ) : null}
 
               {effectiveCanUnsubmit ? (

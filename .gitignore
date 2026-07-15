@@ -47,3 +47,6 @@ next-env.d.ts
 
 # prisma generated client
 /src/generated/
+
+# local file storage (development only - see src/lib/storage)
+/storage/uploads/

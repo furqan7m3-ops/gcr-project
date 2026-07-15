@@ -1,7 +1,8 @@
-import { Paperclip, Pin } from "lucide-react";
+import { Pin } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { AttachmentList } from "@/components/files/attachment-list";
 import { ContentStatusBadge } from "@/features/scheduling/components/content-status-badge";
 import { getInitials } from "@/lib/utils";
 
@@ -79,19 +80,7 @@ export function AnnouncementCard({
       <CardContent className="flex flex-col gap-3 pt-0">
         <p className="whitespace-pre-wrap text-sm text-foreground">{announcement.content}</p>
 
-        {announcement.attachments.length > 0 ? (
-          <div className="flex flex-col gap-1.5">
-            {announcement.attachments.map((attachment) => (
-              <div
-                key={attachment.id}
-                className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
-              >
-                <Paperclip className="h-4 w-4 shrink-0" aria-hidden />
-                <span className="truncate">{attachment.fileName}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <AttachmentList attachments={announcement.attachments} />
 
         <CommentThread
           classroomId={classroomId}

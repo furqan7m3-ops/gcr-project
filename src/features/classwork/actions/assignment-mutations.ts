@@ -18,7 +18,7 @@ import {
   createAssignmentSchema,
   updateAssignmentSchema,
 } from "../validation/assignment-schema";
-import { extractFileMetas, formDataToObject, toErrorResult } from "./shared";
+import { extractUploadedFiles, formDataToObject, toErrorResult } from "./shared";
 
 export async function createAssignmentAction(
   _prevState: ActionResult<AssignmentSummary> | null,
@@ -47,7 +47,7 @@ export async function createAssignmentAction(
         topicId: parsed.data.topicId,
       },
       STATUS_MAP[parsed.data.status],
-      extractFileMetas(formData),
+      extractUploadedFiles(formData),
       parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null,
     );
     revalidatePath(`/classes/${parsed.data.classroomId}/classwork`);
@@ -74,13 +74,18 @@ export async function updateAssignmentAction(
       };
     }
 
-    const assignment = await assignmentService.updateAssignment(parsed.data.assignmentId, user, {
-      title: parsed.data.title,
-      description: parsed.data.description,
-      dueDate: parsed.data.dueDate,
-      points: parsed.data.points,
-      topicId: parsed.data.topicId,
-    });
+    const assignment = await assignmentService.updateAssignment(
+      parsed.data.assignmentId,
+      user,
+      {
+        title: parsed.data.title,
+        description: parsed.data.description,
+        dueDate: parsed.data.dueDate,
+        points: parsed.data.points,
+        topicId: parsed.data.topicId,
+      },
+      extractUploadedFiles(formData),
+    );
     revalidatePath(`/classes/${parsed.data.classroomId}/classwork`);
 
     return { status: "success", data: assignment };
@@ -132,5 +137,31 @@ export async function deleteAssignmentAction(
     return { status: "success", data: undefined };
   } catch (error) {
     return toErrorResult(error, "Couldn't delete the assignment. Please try again.");
+  }
+}
+
+export async function removeAssignmentAttachmentAction(
+  classroomId: string,
+  assignmentId: string,
+  fileAttachmentId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const user = await requireUser();
+
+    const parsed = assignmentIdSchema.safeParse({ assignmentId });
+    if (!parsed.success) {
+      return { status: "error", message: "Invalid assignment." };
+    }
+
+    await assignmentService.removeAssignmentAttachment(
+      parsed.data.assignmentId,
+      fileAttachmentId,
+      user,
+    );
+    revalidatePath(`/classes/${classroomId}/classwork`);
+
+    return { status: "success", data: undefined };
+  } catch (error) {
+    return toErrorResult(error, "Couldn't remove that attachment. Please try again.");
   }
 }

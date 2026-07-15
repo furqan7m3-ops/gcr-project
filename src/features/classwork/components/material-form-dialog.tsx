@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -17,12 +17,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { AttachmentUploadField } from "@/components/files/attachment-upload-field";
 import {
   PublishControls,
   type PublishMode,
 } from "@/features/scheduling/components/publish-controls";
 
-import { createMaterialAction, updateMaterialAction } from "../actions/material-mutations";
+import {
+  createMaterialAction,
+  removeMaterialAttachmentAction,
+  updateMaterialAction,
+} from "../actions/material-mutations";
 import type { ActionResult, MaterialSummary, TopicSummary } from "../types";
 
 const initialState: ActionResult<MaterialSummary> | null = null;
@@ -50,6 +55,9 @@ export function MaterialFormDialog({
   const formRef = useRef<HTMLFormElement>(null);
   const [publishMode, setPublishMode] = useState<PublishMode>("PUBLISHED");
   const [scheduledFor, setScheduledFor] = useState("");
+  const [attachments, setAttachments] = useState(material?.attachments ?? []);
+  const [removingAttachmentId, setRemovingAttachmentId] = useState<string | null>(null);
+  const [isRemoving, startRemoveTransition] = useTransition();
 
   useEffect(() => {
     if (!state) {
@@ -66,6 +74,28 @@ export function MaterialFormDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
+
+  function handleRemoveAttachment(fileAttachmentId: string) {
+    if (!material) {
+      return;
+    }
+    setRemovingAttachmentId(fileAttachmentId);
+    startRemoveTransition(async () => {
+      const result = await removeMaterialAttachmentAction(
+        classroomId,
+        material.id,
+        fileAttachmentId,
+      );
+      if (result.status === "success") {
+        setAttachments((previous) => previous.filter((item) => item.id !== fileAttachmentId));
+        toast.success("Attachment removed");
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
+      setRemovingAttachmentId(null);
+    });
+  }
 
   const fieldErrors = state?.status === "error" ? state.fieldErrors : undefined;
 
@@ -142,21 +172,13 @@ export function MaterialFormDialog({
               ) : null}
             </div>
 
-            {mode === "create" ? (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="material-files">Attach files</Label>
-                <input
-                  id="material-files"
-                  name="files"
-                  type="file"
-                  multiple
-                  className="text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-secondary-foreground"
-                />
-                <p className="text-xs text-muted-foreground">
-                  File names are recorded now; storing file contents isn&apos;t wired up yet.
-                </p>
-              </div>
-            ) : null}
+            <AttachmentUploadField
+              id="material-files"
+              existingAttachments={mode === "edit" ? attachments : undefined}
+              onRemoveExisting={mode === "edit" ? handleRemoveAttachment : undefined}
+              removingId={isRemoving ? removingAttachmentId : null}
+              disabled={isPending}
+            />
 
             {mode === "create" ? (
               <PublishControls
