@@ -41,6 +41,7 @@ interface SubmissionPanelProps {
   maxPoints: number | null;
   initialView: SubmissionView;
   initialComments: PrivateCommentSummary[];
+  archived?: boolean;
 }
 
 export function SubmissionPanel({
@@ -51,6 +52,7 @@ export function SubmissionPanel({
   maxPoints,
   initialView,
   initialComments,
+  archived = false,
 }: SubmissionPanelProps) {
   const router = useRouter();
   const [view, setView] = useState(initialView);
@@ -166,6 +168,12 @@ export function SubmissionPanel({
     view.submission?.submittedAt && dueDate && view.submission.submittedAt > dueDate,
   );
   const isReturned = view.submission?.status === "RETURNED";
+  // Archived classrooms are read-only for students - editing/submitting/
+  // unsubmitting is disabled here even if the raw submission state would
+  // otherwise allow it. The server independently enforces this too
+  // (assertClassroomActive, via assertAssignmentAcceptsWork/unsubmitSubmission).
+  const effectiveCanEdit = view.canEdit && !archived;
+  const effectiveCanUnsubmit = view.canUnsubmit && !archived;
 
   return (
     <div className="flex flex-col gap-4">
@@ -191,7 +199,13 @@ export function SubmissionPanel({
             ) : null}
           </div>
 
-          {view.canEdit ? (
+          {archived ? (
+            <p className="text-xs text-muted-foreground">
+              This class is archived - submissions are closed.
+            </p>
+          ) : null}
+
+          {effectiveCanEdit ? (
             <>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="submission-text">Your response</Label>
@@ -265,7 +279,7 @@ export function SubmissionPanel({
                 </div>
               ) : null}
 
-              {view.canUnsubmit ? (
+              {effectiveCanUnsubmit ? (
                 <Button
                   type="button"
                   variant="outline"

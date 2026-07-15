@@ -19,15 +19,27 @@ export default async function ClassworkPage({
     getClassroomByIdAction(classroomId),
   ]);
 
+  const archived = classroom?.status === "ARCHIVED";
   const canManage = classroom ? canManageClassroom(classroom.role) : false;
+  // Archived classrooms are read-only - creating topics/materials/assignments
+  // and editing existing ones is disabled here; the server independently
+  // enforces this too (assertClassroomActive) for every mutation.
+  const canModify = canManage && !archived;
+
+  const visibleMaterials = archived
+    ? materials.map((material) => ({ ...material, canManage: false }))
+    : materials;
+  const visibleAssignments = archived
+    ? assignments.map((assignment) => ({ ...assignment, canManage: false }))
+    : assignments;
 
   return (
     <TopicList
       classroomId={classroomId}
       topics={topics}
-      materials={materials}
-      assignments={assignments}
-      canManage={canManage}
+      materials={visibleMaterials}
+      assignments={visibleAssignments}
+      canManage={canModify}
     />
   );
 }

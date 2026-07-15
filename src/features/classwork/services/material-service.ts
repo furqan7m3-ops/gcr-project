@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { SessionUser } from "@/auth/session";
 import {
+  assertClassroomActive,
   assertManagementAccess,
   hasManagementAccess,
   loadActiveClassroom,
@@ -89,7 +90,10 @@ function deriveMaterialType(url: string | undefined, fileMetas: FileMeta[]): Mat
 }
 
 async function findActiveMaterialOrThrow(materialId: string) {
-  const material = await prisma.material.findUnique({ where: { id: materialId } });
+  const material = await prisma.material.findUnique({
+    where: { id: materialId },
+    include: { classroom: { select: { status: true } } },
+  });
 
   if (!material || material.deletedAt) {
     throw new ClassroomServiceError("NOT_FOUND", "Material not found.");
@@ -147,12 +151,7 @@ export async function createMaterial(
     throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
   }
 
-  if (classroom.status === ClassroomStatus.ARCHIVED) {
-    throw new ClassroomServiceError(
-      "ARCHIVED",
-      "This class is archived and can't accept new materials.",
-    );
-  }
+  assertClassroomActive(classroom, "This class is archived and can't accept new materials.");
 
   await assertManagementAccess(classroomId, user);
 
@@ -227,6 +226,10 @@ export async function updateMaterial(
   input: MaterialInput,
 ): Promise<MaterialSummary> {
   const existing = await findActiveMaterialOrThrow(materialId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be edited.",
+  );
   await assertManagementAccess(existing.classroomId, user);
 
   if (input.topicId) {
@@ -249,6 +252,10 @@ export async function updateMaterial(
 
 export async function deleteMaterial(materialId: string, user: SessionUser): Promise<void> {
   const existing = await findActiveMaterialOrThrow(materialId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be deleted.",
+  );
   await assertManagementAccess(existing.classroomId, user);
 
   await prisma.material.update({
@@ -304,12 +311,10 @@ export const materialScheduleAdapter: ScheduleAdapter<SchedulableMaterial> = {
 
   async assertSchedulable(record) {
     const classroom = await loadActiveClassroom(record.classroomId);
-    if (classroom.status === ClassroomStatus.ARCHIVED) {
-      throw new ClassroomServiceError(
-        "ARCHIVED",
-        "This class is archived and its materials can't be scheduled or published.",
-      );
-    }
+    assertClassroomActive(
+      classroom,
+      "This class is archived and its materials can't be scheduled or published.",
+    );
   },
 
   async updateSchedule(id, input) {

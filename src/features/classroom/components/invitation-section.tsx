@@ -13,9 +13,14 @@ import { InvitationRow } from "./invitation-row";
 interface InvitationSectionProps {
   classroomId: string;
   initialInvitations: PendingInvitation[];
+  canInvite?: boolean;
 }
 
-export function InvitationSection({ classroomId, initialInvitations }: InvitationSectionProps) {
+export function InvitationSection({
+  classroomId,
+  initialInvitations,
+  canInvite = true,
+}: InvitationSectionProps) {
   const [invitations, setInvitations] = useState(initialInvitations);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -34,9 +39,11 @@ export function InvitationSection({ classroomId, initialInvitations }: Invitatio
           Pending invitations
           <span className="ml-1.5 font-normal text-muted-foreground">{invitations.length}</span>
         </h2>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <UserPlus aria-hidden /> Invite
-        </Button>
+        {canInvite ? (
+          <Button size="sm" onClick={() => setDialogOpen(true)}>
+            <UserPlus aria-hidden /> Invite
+          </Button>
+        ) : null}
       </div>
 
       <Card>

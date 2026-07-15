@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), a centralized Teacher Review Queue (see [Teacher Review Queue](#teacher-review-queue) below), and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar, a global search, an "Archived classes" listing page, and a personal account-settings page are the remaining UI-only or missing pieces.
+GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), a centralized Teacher Review Queue (see [Teacher Review Queue](#teacher-review-queue) below), a fully read-only Archived Classroom Experience (see [Archived Classroom Experience](#archived-classroom-experience) below), and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar, a global search, an "Archived classes" listing page, and a personal account-settings page are the remaining UI-only or missing pieces.
 
 ## Architecture
 
@@ -126,6 +126,7 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 - Create a test class via the dialog - it redirects you straight into the new class.
 - Sign out and sign in as the student (`sofia.student@gcr.dev`): same class card is visible (she's enrolled), but there's no **Create class** button - only **Join class** and, on the **⋮** menu, **Leave class** instead of Edit/Archive.
 - Try joining with a made-up code to see the validation/not-found error.
+- See [Archived Classroom Experience](#archived-classroom-experience) below for what changes once a class is archived.
 
 **4. Classroom detail**
 
@@ -282,6 +283,60 @@ Sign in as the teacher (`daniel.teacher@gcr.dev`) unless a step says otherwise -
 
 - If the teacher manages more than one classroom, confirm submissions from every one of them appear in the unfiltered queue, not just the first class - this is the entire point of the page versus checking each class's Classwork tab individually.
 - Sign in as the admin (`faizan.admin@gcr.dev`) and visit `/review` - confirm it shows submissions across every active classroom platform-wide, not just ones the admin personally teaches.
+
+## Archived Classroom Experience
+
+Archiving a classroom (from its card's **⋮** menu, or `/admin/classrooms`) makes it fully read-only, closely matching Google Classroom's own archived behavior - rather than just hiding a few buttons, every content-mutating Server Action independently refuses to run against an archived classroom, whether or not the UI happened to expose a way to trigger it.
+
+- **Teachers can still**: view the classroom, view announcements/assignments/materials/grades, restore the classroom, and copy the class code. They can no longer post announcements, create assignments, upload materials, invite members, or edit the classroom's own title/section/description - and editing or deleting any _existing_ announcement/assignment/material is blocked too, since the objective is a genuinely read-only class, not just a frozen "create" button.
+- **Students can still**: view the classroom, announcements, assignments, grades, and download existing material attachments. They can no longer submit or unsubmit assignments, post (or receive) Stream comments, or join the class by code.
+- **Grading stays open on purpose**: returning a submission, entering/editing a grade, and private submission comments between a teacher and student are _not_ blocked by archiving - this matches real Google Classroom (grading work already turned in doesn't freeze) and isn't one of the stated restrictions.
+- **Permission model**: `canManageClassroom(role)` (Owner/Teacher/Co-Teacher, or an Admin via its existing bypass) still determines who _can_ manage a classroom regardless of archived state - it's what gates the **Restore** action. A separate, new `canModifyClassroom(role, status)` helper (`src/features/classroom/lib/can-manage.ts`) additionally requires the classroom to be `ACTIVE`, and is what every page now uses to decide whether to render a composer, a "+ Create" button, an Invite button, or a per-item management menu. Permanently deleting a classroom remains exclusively an Admin action from `/admin/classrooms` - there is no teacher-facing delete.
+- **Server enforcement**: a single reusable `assertClassroomActive(classroom)` guard (`classroom-service.ts`) is called by every mutation across the classroom, stream, classwork, submissions, and invitation services before it does anything else - never rely on a hidden or disabled button alone. The same function replaced several pre-existing, duplicated `if (status === ARCHIVED) throw` checks scattered across those services.
+- **UI indicators**: an **Archived** badge over the class banner, a dismissible-by-restoring banner explaining the read-only state, the quick-actions menu swapping **Edit class** / **Archive class** for **Restore class**, disabled/hidden compose and invite controls, and a plain-text note in place of the comment box and submission form for students.
+
+### Archived classroom manual testing walkthrough
+
+Sign in as the teacher (`daniel.teacher@gcr.dev`) unless a step says otherwise - see [Get a working login](#get-a-working-login) if that account still needs its password patched.
+
+**1. Archiving and the read-only indicators**
+
+- From `/classes`, use the "Advanced Mathematics 101" card's **⋮** menu and choose **Archive class** (confirm the dialog first).
+- Open the class - confirm an **Archived** badge now sits over the banner, and a banner strip below it reads "This class is archived and is now read-only," with a **Restore class** button (teacher view only - a student sees the same banner without the button).
+- Open the **⋮** menu again - **Edit class** and **Archive class** are gone, replaced by a single **Restore class** item; **Copy class code** is still there.
+
+**2. Teacher restrictions**
+
+- On **Stream**, confirm the announcement composer is gone entirely - there is nothing to click to attempt a post.
+- On **Classwork**, confirm the **+ Create** button (Assignment/Material/Topic) is gone, and that every assignment/material card's **⋮** management menu (Edit/Delete/Publish/Schedule/Close) is gone too - the cards themselves still render normally, just without controls.
+- On **People**, confirm the **Invite** button is gone from the Pending invitations section (the section itself, and the roster, are still visible).
+- Try navigating directly to `/classes/<id>` and using the class's **⋮** → there is no way left to reach an Edit dialog for the class's title/section/description.
+
+**3. Student restrictions**
+
+- Sign in as a student in this class (`sofia.student@gcr.dev`). Confirm Stream, Classwork, and People all still show their existing content.
+- Open any announcement - confirm the "Add class comment…" box is replaced by "Comments are turned off because this class is archived."
+- Open an assignment that was already published before archiving - confirm the submission panel shows "This class is archived - submissions are closed" instead of the response textarea/attachment picker/Turn in button (if the student already had a submission in progress, its read-only content still displays).
+- Confirm there is no way to join this class from `/classes` even with the correct class code (try **Join class** with it) - you should get an "archived and no longer accepting new members" error.
+
+**4. Restore**
+
+- Back as the teacher, click **Restore class** (from the banner or the **⋮** menu).
+- Confirm the Archived badge/banner disappear immediately, and that the composer, **+ Create** button, per-item management menus, and Invite button are all back.
+- As the student, confirm the comment box and submission form are usable again on the same announcement/assignment as before.
+
+**5. Server enforcement, not just UI**
+
+- While the class is archived again (or by re-archiving it), open a second browser tab to an already-open Edit/Create dialog you had queued up before archiving (or replay a previous form submission) - confirm it fails with a clear "This class is archived…" error rather than silently succeeding, proving the block isn't just a hidden button.
+
+**6. Grading stays open**
+
+- With the class archived, open an already-submitted assignment's submission (from `/review` or the classwork submissions list) and confirm you can still enter a grade, return it, and post a private comment - none of that is blocked by archiving, matching real Google Classroom.
+
+**7. Permissions**
+
+- Confirm a co-teacher (promote a student to **Co-teacher** first, from People) can also restore the class - restore isn't owner-only.
+- Confirm there is no delete option anywhere in the teacher-facing UI for this class; only `/admin/classrooms` (Admin-only) can permanently delete a classroom.
 
 ## Admin Platform
 
@@ -447,7 +502,7 @@ Recommended branches:
 
 - **Authentication & session security**: Auth.js credentials provider, JWT sessions, Prisma adapter, `/login` form, `proxy.ts`-enforced route protection, per-attempt login tracking, auto-lockout after 5 consecutive failures, forced password-change flow, and revocable per-session tracking (a `UserLoginSession` row per sign-in, checked on every request, so a specific session can be terminated despite JWTs otherwise being stateless).
 - **Application shell**: responsive header, collapsible desktop sidebar, mobile drawer navigation, breadcrumbs, user/notifications menus, page-composition primitives, empty/loading/error states - plus a parallel shell for the admin console.
-- **Classroom module**: create/edit/archive a classroom (Teacher/Admin), join/leave by class code (any authenticated user), classroom list ("My Classrooms" cards), classroom detail shell with Stream/Classwork/People tab navigation.
+- **Classroom module**: create/edit/archive/restore a classroom (Teacher/Admin), join/leave by class code (any authenticated user), classroom list ("My Classrooms" cards), classroom detail shell with Stream/Classwork/People tab navigation, and a fully read-only archived state (see [Archived Classroom Experience](#archived-classroom-experience)).
 - **Stream module**: announcements (create/edit/delete/pin/unpin, Teacher/Admin only, students read-only), draft/scheduled/published lifecycle (see Content Scheduling), pinned-first ordering, comments on announcements (create by any member, delete own, teacher/manager can delete any) with optimistic UI, confirmation dialogs on destructive actions, toast notifications throughout.
 - **Classwork module**:
   - _Topics_: create, rename, delete, and drag-and-drop reorder (Teacher/Admin only; students read-only).
@@ -456,6 +511,7 @@ Recommended branches:
   - _Assignment detail page_: full instructions/attachments, the shared management menu for teachers, and a real submission/grading flow - students turn in text and/or attachments, teachers grade (bounded by the assignment's points) and return work with feedback, and a private comment thread sits alongside each submission.
 - **Content Scheduling** (see [Content Scheduling](#content-scheduling) for the full walkthrough): a single shared engine (`src/lib/scheduling` + `src/features/scheduling`) drives Draft/Scheduled/Published transitions for announcements, assignments, and materials alike - Schedule for later, Cancel scheduled publication, and Publish now Server Actions, with the batch "publish everything due" function already built as the seam a future cron job would call.
 - **Teacher Review Queue** (`/review`, Teacher/Admin-only - see [Teacher Review Queue](#teacher-review-queue) for the full walkthrough): a centralized, cross-classroom list of submissions needing attention (submitted/late/returned), with classroom/assignment/student/status/due-date filters, five sort options, four aggregate summary tiles, and inline Grade/Return/Comment via a dialog that reuses the same review panel as the full submission page.
+- **Archived Classroom Experience** (see [Archived Classroom Experience](#archived-classroom-experience) for the full walkthrough): archiving a classroom makes it genuinely read-only - every content-mutating Server Action across classroom/stream/classwork/submissions/invitations is independently blocked server-side via one shared `assertClassroomActive` guard, with matching UI (archived badge/banner, Restore action, disabled compose/invite/management controls) so the interface never dangles a control the server would reject.
 - **People module**: classroom roster split into Teachers/Students, an Invite dialog (email or shareable code), role changes (promote/demote co-teacher, transfer ownership), and remove-member - all authorized server-side.
 - **Notifications**: real, database-backed notifications (new assignment/material/announcement, submission returned, private comment) with an unread-count badge and a notification center, generated as a side effect of the actions above.
 - **Admin platform** (`/admin`, `UserRole.ADMIN`-only - see [Admin Platform](#admin-platform) for the full walkthrough): dashboard analytics, user management (create/edit/status/reset password/force password change), classroom administration (archive/restore/delete/transfer ownership/assign teacher), content moderation (archive/delete/restore announcements/comments/materials/assignments), six detailed filterable reports, a full audit log of every administrative action, platform-wide settings (branding, password policy, defaults), and a security dashboard (active sessions, failed logins, account lockouts).

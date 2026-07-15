@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 
 import type { SessionUser } from "@/auth/session";
-import { assertManagementAccess } from "@/features/classroom/services/classroom-service";
+import {
+  assertClassroomActive,
+  assertManagementAccess,
+} from "@/features/classroom/services/classroom-service";
 import { canManageClassroom } from "@/features/classroom/lib/can-manage";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { notifySubmissionReturned } from "@/features/notifications/services/notification-generator";
@@ -94,12 +97,10 @@ async function assertStudentEligibility(classroomId: string, user: SessionUser):
 }
 
 function assertAssignmentAcceptsWork(assignment: AssignmentContext): void {
-  if (assignment.classroom.status === ClassroomStatus.ARCHIVED) {
-    throw new ClassroomServiceError(
-      "ARCHIVED",
-      "This class is archived and no longer accepts submissions.",
-    );
-  }
+  assertClassroomActive(
+    assignment.classroom,
+    "This class is archived and no longer accepts submissions.",
+  );
 
   if (assignment.status === AssignmentStatus.CLOSED) {
     throw new ClassroomServiceError(
@@ -336,6 +337,10 @@ export async function unsubmitSubmission(
 ): Promise<SubmissionView> {
   const assignment = await loadAssignmentContext(assignmentId);
   await assertStudentEligibility(assignment.classroomId, user);
+  assertClassroomActive(
+    assignment.classroom,
+    "This class is archived and submissions can no longer be changed.",
+  );
 
   const existing = await findSubmissionByAssignmentAndStudent(assignmentId, user.id);
 

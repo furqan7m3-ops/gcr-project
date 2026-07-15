@@ -5,6 +5,7 @@ import { Award, CalendarClock } from "lucide-react";
 import { SectionHeader } from "@/components/page/section-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { getClassroomByIdAction } from "@/features/classroom/actions/classroom-queries";
 import { AssignmentAttachments } from "@/features/classwork/components/assignment-attachments";
 import { AssignmentManagementMenu } from "@/features/classwork/components/assignment-management-menu";
 import { formatDueDate } from "@/features/classwork/lib/format-assignment";
@@ -28,17 +29,23 @@ export default async function AssignmentDetailPage({
 }) {
   const { classroomId, assignmentId } = await params;
 
-  const [assignment, topics, user] = await Promise.all([
+  const [assignment, topics, user, classroom] = await Promise.all([
     getAssignmentDetail(classroomId, assignmentId),
     listTopicsForClassroom(classroomId),
     requireUser(),
+    getClassroomByIdAction(classroomId),
   ]);
 
   if (!assignment) {
     notFound();
   }
 
+  const archived = classroom?.status === "ARCHIVED";
   const dueDateLabel = formatDueDate(assignment.dueDate);
+  // Archived classrooms are read-only - the management menu is hidden here
+  // too, not just on the Classwork list. The server independently enforces
+  // this (assertClassroomActive) for every mutation regardless.
+  const canManageContent = assignment.canManage && !archived;
 
   let submissionPanel: ReactNode;
   if (assignment.canManage) {
@@ -71,6 +78,7 @@ export default async function AssignmentDetailPage({
         maxPoints={assignment.points}
         initialView={await getStudentSubmission(assignmentId)}
         initialComments={await getOwnSubmissionComments(assignmentId)}
+        archived={archived}
       />
     );
   }
@@ -84,7 +92,7 @@ export default async function AssignmentDetailPage({
           { label: assignment.title },
         ]}
         actions={
-          assignment.canManage ? (
+          canManageContent ? (
             <AssignmentManagementMenu
               classroomId={classroomId}
               assignment={assignment}

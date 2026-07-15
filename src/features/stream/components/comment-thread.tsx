@@ -18,6 +18,7 @@ interface CommentThreadProps {
   announcementId: string;
   comments: CommentSummary[];
   currentUser: { id: string; name: string; image: string | null };
+  archived?: boolean;
 }
 
 type OptimisticAction =
@@ -41,6 +42,7 @@ export function CommentThread({
   announcementId,
   comments,
   currentUser,
+  archived = false,
 }: CommentThreadProps) {
   const router = useRouter();
   const [content, setContent] = useState("");
@@ -150,30 +152,36 @@ export function CommentThread({
         <p className="text-xs text-muted-foreground">No comments yet</p>
       )}
 
-      <form onSubmit={handleSubmit} className="flex items-center gap-2">
-        <Avatar className="h-7 w-7 shrink-0">
-          {currentUser.image ? (
-            <AvatarImage src={currentUser.image} alt={currentUser.name} />
-          ) : null}
-          <AvatarFallback className="text-xs">{getInitials(currentUser.name)}</AvatarFallback>
-        </Avatar>
-        <Input
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          placeholder="Add class comment…"
-          maxLength={2000}
-          className="h-9"
-        />
-        <Button
-          type="submit"
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          aria-label="Post comment"
-        >
-          <Send className="h-4 w-4" />
-        </Button>
-      </form>
+      {archived ? (
+        <p className="text-xs text-muted-foreground">
+          Comments are turned off because this class is archived.
+        </p>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex items-center gap-2">
+          <Avatar className="h-7 w-7 shrink-0">
+            {currentUser.image ? (
+              <AvatarImage src={currentUser.image} alt={currentUser.name} />
+            ) : null}
+            <AvatarFallback className="text-xs">{getInitials(currentUser.name)}</AvatarFallback>
+          </Avatar>
+          <Input
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Add class comment…"
+            maxLength={2000}
+            className="h-9"
+          />
+          <Button
+            type="submit"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            aria-label="Post comment"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </form>
+      )}
     </div>
   );
 }

@@ -2,12 +2,15 @@ import type { SessionUser } from "@/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
   ClassroomMembershipStatus,
-  ClassroomStatus,
   InvitationStatus,
   InvitationType,
 } from "@/generated/prisma/enums";
 
-import { assertManagementAccess, loadActiveClassroom } from "./classroom-service";
+import {
+  assertClassroomActive,
+  assertManagementAccess,
+  loadActiveClassroom,
+} from "./classroom-service";
 import { ClassroomServiceError } from "../lib/errors";
 import type { PendingInvitation } from "../types";
 
@@ -31,13 +34,7 @@ function toPendingInvitation(invitation: {
 
 async function assertClassroomAcceptsInvitations(classroomId: string): Promise<void> {
   const classroom = await loadActiveClassroom(classroomId);
-
-  if (classroom.status === ClassroomStatus.ARCHIVED) {
-    throw new ClassroomServiceError(
-      "ARCHIVED",
-      "This class is archived and can't accept new invitations.",
-    );
-  }
+  assertClassroomActive(classroom, "This class is archived and can't accept new invitations.");
 }
 
 export async function listPendingInvitations(

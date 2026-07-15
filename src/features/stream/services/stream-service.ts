@@ -1,5 +1,6 @@
 import type { SessionUser } from "@/auth/session";
 import {
+  assertClassroomActive,
   assertManagementAccess,
   assertMembership,
   hasManagementAccess,
@@ -96,7 +97,10 @@ function toAnnouncementSummary(
 // load here too (a manager needs to be able to edit content before it
 // publishes). createComment has its own, stricter PUBLISHED-only lookup below.
 async function findActiveAnnouncementOrThrow(announcementId: string) {
-  const announcement = await prisma.announcement.findUnique({ where: { id: announcementId } });
+  const announcement = await prisma.announcement.findUnique({
+    where: { id: announcementId },
+    include: { classroom: { select: { status: true } } },
+  });
 
   if (!announcement || announcement.deletedAt) {
     throw new ClassroomServiceError("NOT_FOUND", "Announcement not found.");
@@ -170,12 +174,7 @@ export async function createAnnouncement(
     throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
   }
 
-  if (classroom.status === ClassroomStatus.ARCHIVED) {
-    throw new ClassroomServiceError(
-      "ARCHIVED",
-      "This class is archived and can't accept new announcements.",
-    );
-  }
+  assertClassroomActive(classroom, "This class is archived and can't accept new announcements.");
 
   // Per-classroom check (not just a global role check) - a TEACHER who doesn't
   // teach this specific classroom can't post to it.
@@ -210,6 +209,10 @@ export async function updateAnnouncement(
   content: string,
 ): Promise<AnnouncementSummary> {
   const existing = await findActiveAnnouncementOrThrow(announcementId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be edited.",
+  );
   await assertManagementAccess(existing.classroomId, user);
 
   const updated = await prisma.announcement.update({
@@ -235,6 +238,10 @@ export async function updateAnnouncement(
 
 export async function deleteAnnouncement(announcementId: string, user: SessionUser): Promise<void> {
   const existing = await findActiveAnnouncementOrThrow(announcementId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be deleted.",
+  );
   await assertManagementAccess(existing.classroomId, user);
 
   await prisma.announcement.update({
@@ -258,6 +265,10 @@ export async function setAnnouncementPinned(
   pinned: boolean,
 ): Promise<AnnouncementSummary> {
   const existing = await findActiveAnnouncementOrThrow(announcementId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be changed.",
+  );
   await assertManagementAccess(existing.classroomId, user);
 
   const updated = await prisma.announcement.update({
@@ -296,12 +307,10 @@ export async function createComment(
     throw new ClassroomServiceError("NOT_FOUND", "Announcement not found.");
   }
 
-  if (announcement.classroom.status !== ClassroomStatus.ACTIVE) {
-    throw new ClassroomServiceError(
-      "ARCHIVED",
-      "This class is archived and can't accept new comments.",
-    );
-  }
+  assertClassroomActive(
+    announcement.classroom,
+    "This class is archived and can't accept new comments.",
+  );
 
   // Any active member (any role) may comment - unlike posting an announcement,
   // this doesn't require management rights.
@@ -403,12 +412,10 @@ export const announcementScheduleAdapter: ScheduleAdapter<SchedulableAnnouncemen
 
   async assertSchedulable(record) {
     const classroom = await loadActiveClassroom(record.classroomId);
-    if (classroom.status === ClassroomStatus.ARCHIVED) {
-      throw new ClassroomServiceError(
-        "ARCHIVED",
-        "This class is archived and its announcements can't be scheduled or published.",
-      );
-    }
+    assertClassroomActive(
+      classroom,
+      "This class is archived and its announcements can't be scheduled or published.",
+    );
   },
 
   async updateSchedule(id, input) {

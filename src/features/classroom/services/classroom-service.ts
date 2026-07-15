@@ -80,6 +80,23 @@ export async function loadActiveClassroom(classroomId: string) {
 }
 
 /**
+ * The single server-side "is this classroom currently editable" check -
+ * archived classrooms are read-only (Phase 14.3), so every content mutation
+ * across classroom/stream/classwork/invitations calls this instead of
+ * re-implementing its own `if (status === ARCHIVED) throw` branch. Never
+ * rely on the UI hiding a button to enforce this - every service function
+ * that creates, edits, or deletes classroom content calls this first.
+ */
+export function assertClassroomActive(
+  classroom: { status: ClassroomStatus },
+  message = "This class is archived and is now read-only.",
+): void {
+  if (classroom.status === ClassroomStatus.ARCHIVED) {
+    throw new ClassroomServiceError("ARCHIVED", message);
+  }
+}
+
+/**
  * Only OWNER/TEACHER/CO_TEACHER on this specific classroom (or a platform ADMIN) may
  * manage it - a global TEACHER role does not imply access to every classroom.
  */
@@ -272,7 +289,11 @@ export async function updateClassroom(
   user: SessionUser,
   input: Omit<UpdateClassroomInput, "classroomId">,
 ): Promise<ClassroomSummary> {
-  await loadActiveClassroom(classroomId);
+  const classroom = await loadActiveClassroom(classroomId);
+  assertClassroomActive(
+    classroom,
+    "This class is archived - restore it before editing its settings.",
+  );
   await assertManagementAccess(classroomId, user);
 
   // Neither read depends on the other's result, so run them concurrently.
@@ -306,6 +327,28 @@ export async function archiveClassroom(classroomId: string, user: SessionUser): 
   });
 }
 
+/**
+ * Teacher-facing restore, distinct from the admin console's version
+ * (admin/classrooms/services/classroom-admin-service.ts) - same effect, but
+ * gated by assertManagementAccess (Owner/Teacher/Co-Teacher, or an Admin via
+ * its existing bypass) rather than by the admin route itself. Permanently
+ * deleting a classroom remains admin-only and lives exclusively in the admin
+ * service - there is deliberately no teacher-facing delete path.
+ */
+export async function restoreClassroom(classroomId: string, user: SessionUser): Promise<void> {
+  const classroom = await loadActiveClassroom(classroomId);
+  await assertManagementAccess(classroomId, user);
+
+  if (classroom.status !== ClassroomStatus.ARCHIVED) {
+    throw new ClassroomServiceError("VALIDATION_ERROR", "This class isn't archived.");
+  }
+
+  await prisma.classroom.update({
+    where: { id: classroomId },
+    data: { status: ClassroomStatus.ACTIVE },
+  });
+}
+
 export async function joinClassroomByCode(
   user: SessionUser,
   code: string,
@@ -321,12 +364,10 @@ export async function joinClassroomByCode(
     throw new ClassroomServiceError("NOT_FOUND", "No class was found with that code.");
   }
 
-  if (classroom.status === ClassroomStatus.ARCHIVED) {
-    throw new ClassroomServiceError(
-      "ARCHIVED",
-      "This class has been archived and is no longer accepting new members.",
-    );
-  }
+  assertClassroomActive(
+    classroom,
+    "This class has been archived and is no longer accepting new members.",
+  );
 
   const existingMembership = await prisma.classroomMembership.findUnique({
     where: { classroomId_userId: { classroomId: classroom.id, userId: user.id } },
@@ -505,12 +546,7 @@ export async function changeMemberRole(
     }),
   ]);
 
-  if (classroom.status === ClassroomStatus.ARCHIVED) {
-    throw new ClassroomServiceError(
-      "ARCHIVED",
-      "This class is archived and roles can't be changed.",
-    );
-  }
+  assertClassroomActive(classroom, "This class is archived and roles can't be changed.");
 
   await assertManagementAccess(classroomId, actor);
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, LogOut, MoreVertical, Pencil, ShieldOff } from "lucide-react";
+import { Copy, LogOut, MoreVertical, Pencil, RotateCcw, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,11 @@ import {
 import { usePendingAction } from "@/hooks/use-pending-action";
 import { cn } from "@/lib/utils";
 
-import { archiveClassroomAction, leaveClassroomAction } from "../actions/classroom-mutations";
+import {
+  archiveClassroomAction,
+  leaveClassroomAction,
+  restoreClassroomAction,
+} from "../actions/classroom-mutations";
 import { useCopyToClipboard } from "../hooks/use-copy-to-clipboard";
 import type { ClassroomSummary } from "../types";
 import { ClassroomFormDialog } from "./classroom-form-dialog";
@@ -39,12 +43,21 @@ export function ClassroomQuickActionsMenu({
   const [editOpen, setEditOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const isArchived = classroom.status === "ARCHIVED";
 
   const archive = usePendingAction(
     () => archiveClassroomAction(classroom.id),
     () => {
       toast.success(`${classroom.title} archived`);
       setArchiveOpen(false);
+      router.refresh();
+    },
+  );
+
+  const restore = usePendingAction(
+    () => restoreClassroomAction(classroom.id),
+    () => {
+      toast.success(`${classroom.title} restored`);
       router.refresh();
     },
   );
@@ -78,15 +91,23 @@ export function ClassroomQuickActionsMenu({
           {canManage ? (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setEditOpen(true)}>
-                <Pencil /> Edit class
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => setArchiveOpen(true)}
-                className="text-destructive focus:text-destructive"
-              >
-                <ShieldOff /> Archive class
-              </DropdownMenuItem>
+              {isArchived ? (
+                <DropdownMenuItem onSelect={restore.run} disabled={restore.isPending}>
+                  <RotateCcw /> Restore class
+                </DropdownMenuItem>
+              ) : (
+                <>
+                  <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                    <Pencil /> Edit class
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => setArchiveOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <ShieldOff /> Archive class
+                  </DropdownMenuItem>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -102,7 +123,7 @@ export function ClassroomQuickActionsMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {canManage ? (
+      {canManage && !isArchived ? (
         <ClassroomFormDialog
           mode="edit"
           classroom={classroom}

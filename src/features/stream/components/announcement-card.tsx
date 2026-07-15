@@ -35,12 +35,14 @@ interface AnnouncementCardProps {
   announcement: AnnouncementSummary;
   classroomId: string;
   currentUser: { id: string; name: string; image: string | null };
+  archived?: boolean;
 }
 
 export function AnnouncementCard({
   announcement,
   classroomId,
   currentUser,
+  archived = false,
 }: AnnouncementCardProps) {
   return (
     <Card>
@@ -96,6 +98,7 @@ export function AnnouncementCard({
           announcementId={announcement.id}
           comments={announcement.comments}
           currentUser={currentUser}
+          archived={archived}
         />
       </CardContent>
     </Card>

@@ -84,6 +84,22 @@ export async function archiveClassroomAction(
   }
 }
 
+export async function restoreClassroomAction(
+  classroomId: string,
+): Promise<ActionResult<undefined>> {
+  try {
+    const user = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
+    await classroomService.restoreClassroom(classroomId, user);
+
+    revalidatePath("/classes");
+    revalidatePath(`/classes/${classroomId}`);
+
+    return { status: "success", data: undefined };
+  } catch (error) {
+    return toErrorResult(error, "Couldn't restore the class. Please try again.");
+  }
+}
+
 export async function joinClassroomAction(
   _prevState: ActionResult<ClassroomSummary> | null,
   formData: FormData,

@@ -14,20 +14,30 @@ export default async function StreamPage({ params }: { params: Promise<{ classro
     getCurrentUser(),
   ]);
 
-  const canPost = classroom ? canManageClassroom(classroom.role) : false;
+  const archived = classroom?.status === "ARCHIVED";
+  const canPost = classroom ? canManageClassroom(classroom.role) && !archived : false;
   const currentUser = {
     id: user?.id ?? "",
     name: user?.name ?? "You",
     image: user?.image ?? null,
   };
 
+  // Archived classrooms are read-only - per-item management menus and the
+  // comment box are disabled by stripping canManage/allowing comments here,
+  // not just by omitting the composer above. The server independently
+  // enforces this too (assertClassroomActive), this only keeps the UI honest.
+  const visibleAnnouncements = archived
+    ? announcements.map((announcement) => ({ ...announcement, canManage: false }))
+    : announcements;
+
   return (
     <div className="flex flex-col gap-4">
       {canPost ? <AnnouncementComposer classroomId={classroomId} /> : null}
       <AnnouncementList
-        announcements={announcements}
+        announcements={visibleAnnouncements}
         classroomId={classroomId}
         currentUser={currentUser}
+        archived={archived}
       />
     </div>
   );

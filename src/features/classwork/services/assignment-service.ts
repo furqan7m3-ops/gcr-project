@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { SessionUser } from "@/auth/session";
 import {
+  assertClassroomActive,
   assertManagementAccess,
   hasManagementAccess,
   loadActiveClassroom,
@@ -73,7 +74,7 @@ async function findActiveAssignmentOrThrow(assignmentId: string) {
   // callers (update/close/delete) simply don't touch the extra field.
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
-    include: { classroom: { select: { title: true } } },
+    include: { classroom: { select: { title: true, status: true } } },
   });
 
   if (!assignment || assignment.deletedAt) {
@@ -172,12 +173,7 @@ export async function createAssignment(
     throw new ClassroomServiceError("NOT_FOUND", "Classroom not found.");
   }
 
-  if (classroom.status === ClassroomStatus.ARCHIVED) {
-    throw new ClassroomServiceError(
-      "ARCHIVED",
-      "This class is archived and can't accept new assignments.",
-    );
-  }
+  assertClassroomActive(classroom, "This class is archived and can't accept new assignments.");
 
   await assertManagementAccess(classroomId, user);
 
@@ -250,6 +246,10 @@ export async function updateAssignment(
   input: AssignmentInput,
 ): Promise<AssignmentSummary> {
   const existing = await findActiveAssignmentOrThrow(assignmentId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be edited.",
+  );
   await assertManagementAccess(existing.classroomId, user);
 
   if (input.topicId) {
@@ -277,6 +277,10 @@ export async function updateAssignment(
 
 export async function closeAssignment(assignmentId: string, user: SessionUser): Promise<void> {
   const existing = await findActiveAssignmentOrThrow(assignmentId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its assignments can't be closed.",
+  );
   await assertManagementAccess(existing.classroomId, user);
 
   if (existing.status !== AssignmentStatus.PUBLISHED) {
@@ -294,6 +298,10 @@ export async function closeAssignment(assignmentId: string, user: SessionUser): 
 
 export async function deleteAssignment(assignmentId: string, user: SessionUser): Promise<void> {
   const existing = await findActiveAssignmentOrThrow(assignmentId);
+  assertClassroomActive(
+    existing.classroom,
+    "This class is archived and its content can't be deleted.",
+  );
   await assertManagementAccess(existing.classroomId, user);
 
   await prisma.assignment.update({
@@ -366,12 +374,10 @@ export const assignmentScheduleAdapter: ScheduleAdapter<SchedulableAssignment> =
     }
 
     const classroom = await loadActiveClassroom(record.classroomId);
-    if (classroom.status === ClassroomStatus.ARCHIVED) {
-      throw new ClassroomServiceError(
-        "ARCHIVED",
-        "This class is archived and its assignments can't be scheduled or published.",
-      );
-    }
+    assertClassroomActive(
+      classroom,
+      "This class is archived and its assignments can't be scheduled or published.",
+    );
   },
 
   async updateSchedule(id, input) {

@@ -17,7 +17,11 @@ export default async function PeoplePage({ params }: { params: Promise<{ classro
     notFound();
   }
 
+  const archived = classroom.status === "ARCHIVED";
   const canManage = canManageClassroom(classroom.role);
+  // Inviting members is disabled while archived - the server independently
+  // enforces this too (assertClassroomActive, via inviteMember).
+  const canInvite = canManage && !archived;
 
   const [roster, invitations] = await Promise.all([
     getClassroomRoster(classroomId),
@@ -39,7 +43,11 @@ export default async function PeoplePage({ params }: { params: Promise<{ classro
       </p>
 
       {canManage ? (
-        <InvitationSection classroomId={classroomId} initialInvitations={invitations ?? []} />
+        <InvitationSection
+          classroomId={classroomId}
+          initialInvitations={invitations ?? []}
+          canInvite={canInvite}
+        />
       ) : null}
 
       <RosterManager
