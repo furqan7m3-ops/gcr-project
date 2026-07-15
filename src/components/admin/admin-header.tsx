@@ -50,6 +50,11 @@ export function AdminHeader({
           <LogOut className="h-4 w-4" aria-hidden />
           Exit to app
         </Link>
+        <Button variant="ghost" size="icon" aria-label="Exit to app" className="sm:hidden" asChild>
+          <Link href="/dashboard">
+            <LogOut className="h-5 w-5" />
+          </Link>
+        </Button>
         <UserMenu user={user} />
       </div>
     </header>
