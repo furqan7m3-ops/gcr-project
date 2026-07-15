@@ -2,7 +2,7 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { isSessionRowValid } from "@/lib/auth/session-validity";
 
 const publicRoutes = ["/", "/login", "/about"];
 const authRoutes = ["/login"];
@@ -28,15 +28,10 @@ export default async function proxy(request: NextRequest) {
   // and would keep working until it naturally expires, so every authenticated
   // request re-checks the session row keyed by the token's sessionId and
   // treats a revoked/expired/missing row as if there were no session at all.
-  if (isAuthenticated && !isAuthApiRoute && typeof token?.sessionId === "string") {
-    const session = await prisma.userLoginSession.findUnique({
-      where: { tokenId: token.sessionId },
-      select: { revokedAt: true, expiresAt: true },
-    });
-
-    if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      isAuthenticated = false;
-    }
+  // Shared with getCurrentUser() so page-level and middleware-level auth
+  // checks can never disagree about a stale-but-cryptographically-valid JWT.
+  if (isAuthenticated && !isAuthApiRoute) {
+    isAuthenticated = await isSessionRowValid(token?.sessionId as string | undefined);
   }
 
   if (!isAuthenticated && !isPublicRoute) {

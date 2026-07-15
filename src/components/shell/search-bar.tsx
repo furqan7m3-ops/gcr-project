@@ -1,23 +1,38 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
+import { useSearchDialog } from "@/features/search/context/search-dialog-context";
 import { cn } from "@/lib/utils";
 
 export function SearchBar({ className }: { className?: string }) {
+  const { setOpen } = useSearchDialog();
+  // Avoids rendering a platform-specific shortcut hint ("⌘K" vs "Ctrl K")
+  // until after hydration, so the server-rendered markup doesn't depend on
+  // navigator.platform (unavailable during SSR) and can't mismatch.
+  const [isMac, setIsMac] = useState(false);
+
+  useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+    setIsMac(/Mac|iPhone|iPad/.test(window.navigator.platform ?? window.navigator.userAgent));
+  }, []);
+
   return (
-    <div className={cn("relative w-full max-w-md", className)}>
-      <Search
-        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-        aria-hidden
-      />
-      <Input
-        type="search"
-        placeholder="Search classes, people, and files"
-        aria-label="Search"
-        className="rounded-full border-transparent bg-muted pl-10 focus-visible:border-input focus-visible:bg-card"
-      />
-    </div>
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className={cn(
+        "flex w-full max-w-md items-center gap-2 rounded-full border border-transparent bg-muted px-3.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-input hover:bg-card",
+        className,
+      )}
+      aria-label="Search classes, people, and files"
+    >
+      <Search className="h-4 w-4 shrink-0" aria-hidden />
+      <span className="flex-1 truncate">Search classes, people, and files</span>
+      <kbd className="hidden shrink-0 rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
+        {isMac ? "⌘K" : "Ctrl K"}
+      </kbd>
+    </button>
   );
 }

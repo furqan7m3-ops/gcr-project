@@ -266,6 +266,56 @@ export async function listActiveClassroomIds(userId: string): Promise<string[]> 
   return memberships.map((membership) => membership.classroomId);
 }
 
+export interface ClassroomSearchScope {
+  /** Classrooms this user manages - full visibility, including drafts/scheduled content. */
+  manageableClassroomIds: string[];
+  /** Classrooms this user is only a plain member of - published-only content visibility. */
+  memberOnlyClassroomIds: string[];
+}
+
+/**
+ * The classroom scope for cross-classroom search (Phase 15.1) - unlike
+ * listActiveClassroomIds/getManageableClassrooms (review-service), this
+ * deliberately *includes* archived classrooms: archived content stays
+ * readable (see Archived Classroom Experience), so it must stay findable.
+ * Only DELETED classrooms are excluded. Platform admins bypass membership
+ * and get every non-deleted classroom as "manageable" (full visibility),
+ * matching the ADMIN-bypass convention used everywhere else.
+ */
+export async function getClassroomSearchScope(user: SessionUser): Promise<ClassroomSearchScope> {
+  if (user.role === UserRole.ADMIN) {
+    const classrooms = await prisma.classroom.findMany({
+      where: { status: { not: ClassroomStatus.DELETED } },
+      select: { id: true },
+    });
+
+    return {
+      manageableClassroomIds: classrooms.map((classroom) => classroom.id),
+      memberOnlyClassroomIds: [],
+    };
+  }
+
+  const memberships = await prisma.classroomMembership.findMany({
+    where: {
+      userId: user.id,
+      status: ClassroomMembershipStatus.ACTIVE,
+      classroom: { status: { not: ClassroomStatus.DELETED } },
+    },
+    select: { classroomId: true, role: true },
+  });
+
+  const manageableClassroomIds: string[] = [];
+  const memberOnlyClassroomIds: string[] = [];
+
+  for (const membership of memberships) {
+    (canManageClassroom(membership.role) ? manageableClassroomIds : memberOnlyClassroomIds).push(
+      membership.classroomId,
+    );
+  }
+
+  return { manageableClassroomIds, memberOnlyClassroomIds };
+}
+
 export async function getClassroomForUser(
   classroomId: string,
   user: SessionUser,

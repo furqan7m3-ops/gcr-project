@@ -1,17 +1,14 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth/next";
 
-import { authConfig } from "@/auth";
+import { getCurrentUser } from "@/auth/session";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { LoginForm } from "./login-form";
 
 export default async function LoginPage() {
-  const session = (await getServerSession(authConfig as never)) as {
-    user?: { id?: string };
-  } | null;
+  const user = await getCurrentUser();
 
-  if (session?.user) {
+  if (user) {
     redirect("/dashboard");
   }
 

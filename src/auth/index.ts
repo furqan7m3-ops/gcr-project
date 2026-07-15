@@ -21,6 +21,7 @@ declare module "next-auth" {
       role: string;
       mustChangePassword: boolean;
     };
+    sessionId?: string;
   }
 
   interface User {
@@ -197,6 +198,7 @@ export const authConfig: NextAuthOptions = {
         session.user.role = (token.role as string) ?? "STUDENT";
         session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }
+      session.sessionId = token.sessionId as string | undefined;
 
       return session;
     },

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { GraduationCap, Menu, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useSearchDialog } from "@/features/search/context/search-dialog-context";
 import { NotificationsMenu } from "@/features/notifications/components/notifications-menu";
 
 import { SearchBar } from "./search-bar";
@@ -20,6 +21,7 @@ export function Header({
   platformName?: string;
 }) {
   const { toggleCollapsed, setMobileOpen } = useSidebar();
+  const { setOpen: setSearchOpen } = useSearchDialog();
 
   function handleMenuClick() {
     const isDesktop =
@@ -45,7 +47,13 @@ export function Header({
         <SearchBar className="hidden md:flex" />
       </div>
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" aria-label="Search" className="md:hidden">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Search"
+          className="md:hidden"
+          onClick={() => setSearchOpen(true)}
+        >
           <Search className="h-5 w-5" />
         </Button>
         <NotificationsMenu initialUnreadCount={initialUnreadCount} />

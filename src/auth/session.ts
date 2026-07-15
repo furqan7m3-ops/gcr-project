@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth/next";
 
 import { authConfig } from "@/auth";
+import { isSessionRowValid } from "@/lib/auth/session-validity";
 import { UserRole } from "@/generated/prisma/enums";
 
 export interface SessionUser {
@@ -15,6 +16,10 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   const session = await getServerSession(authConfig);
 
   if (!session?.user?.id) {
+    return null;
+  }
+
+  if (!(await isSessionRowValid(session.sessionId))) {
     return null;
   }
 
