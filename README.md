@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar, a global search, an "Archived classes" listing page, and a personal account-settings page are the remaining UI-only or missing pieces.
+GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), a centralized Teacher Review Queue (see [Teacher Review Queue](#teacher-review-queue) below), and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar, a global search, an "Archived classes" listing page, and a personal account-settings page are the remaining UI-only or missing pieces.
 
 ## Architecture
 
@@ -179,6 +179,7 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 - As the student: turn in work via the submission panel (text answer and/or attachments) - status moves Assigned → Submitted (or Late, past the due date). Turn it in again before the teacher reviews it and it stays editable.
 - As the teacher: open the roster-style submissions list, click into a student's submission, enter a grade (bounded by the assignment's points) and feedback, and return it - the student sees the grade badge and feedback, and a private comment thread is available on either side.
 - As the student, try navigating directly to a **draft** assignment's detail URL - you should get a clean "Assignment not found" page, not the real content.
+- See [Teacher Review Queue](#teacher-review-queue) below for the centralized, cross-classroom "To review" page built on top of this same grading flow.
 
 **11. Responsive check**
 
@@ -232,6 +233,55 @@ A step-by-step path through the scheduling flow for all three content types. Sig
 **6. Confirming a real scheduled publish (optional, no UI trigger yet)**
 
 - The batch function that would let a cron job publish everything past its scheduled time (`publishScheduledContent`) exists as a Server Action but is intentionally not wired to any UI button or automatic timer yet (see [Content Scheduling](#content-scheduling)) - there is nothing to click here. If you want to see it fire, schedule an item for a time a minute in the future, wait, and re-visit the page: it will still show as **Scheduled** until something actually calls that batch function (a future cron job, once added).
+
+## Teacher Review Queue
+
+`/review` is a single, cross-classroom page listing every submission a teacher (or admin) needs to act on - no more clicking into each class's Classwork tab one at a time. It's gated to `UserRole.TEACHER`/`ADMIN` the same way `/admin` is gated to `ADMIN` - `src/proxy.ts` redirects anyone else to `/dashboard?denied=review` before the page renders, and the "To review" sidebar link is hidden from students entirely.
+
+- **What shows up**: submitted, late, and returned submissions across every classroom the signed-in teacher manages (an admin sees every active classroom platform-wide, the same bypass rule used everywhere else). A student's in-progress draft is never listed - consistent with the rule already used on a single assignment's submission list, where a draft is invisible to teachers, not just hidden.
+- **Filters**: classroom, assignment, student, status (Submitted / Late / Returned), and a due-before date - all URL-driven (`?classroomId=`, `?status=`, etc.), so a filtered view is a shareable/bookmarkable link. Picking a classroom narrows the assignment and student dropdowns to just that class.
+- **Sorting**: Newest, Oldest, Due date, Student name, Assignment name - click a column header or use the sort dropdown.
+- **Summary tiles**: Pending reviews, Late submissions, Returned today, Recently submitted (last 48 hours) - computed with a single aggregate query, not by counting the current page of rows.
+- **Actions, without leaving the queue**: click **Open** on any row to open a dialog with the full grading panel - the exact same component used on the dedicated submission page - so **Grade**, **Return**, and **Leave a private comment** all work inline. A link inside the dialog also jumps to the full submission page if you'd rather work there.
+- **Query optimization**: the row list is one indexed `findMany` (classroom/assignment/student/status/due-date filters all pushed into the `WHERE` clause, sorting done in the database, not in JavaScript) plus one `count()` for pagination - no per-row follow-up queries. The four summary tiles are computed by a single raw SQL query using conditional `COUNT(*) FILTER (WHERE ...)` aggregates instead of four separate round trips.
+
+### Teacher review queue manual testing walkthrough
+
+Sign in as the teacher (`daniel.teacher@gcr.dev`) unless a step says otherwise - see [Get a working login](#get-a-working-login) if that account still needs its password patched.
+
+**1. Access control**
+
+- Signed out, visit `/review` directly - redirected to `/login`.
+- Signed in as the student seed account, visit `/review` directly - redirected to `/dashboard?denied=review` with an error toast; the **To review** sidebar link is absent from the student's nav entirely.
+- Signed in as the teacher, click **To review** in the sidebar (or visit `/review`) - the page loads with summary tiles, filters, and a table.
+
+**2. Getting submissions into the queue**
+
+- As the student (`sofia.student@gcr.dev` or `liam.student@gcr.dev`), turn in an assignment that's still open - go back to the teacher and confirm it now appears in `/review` with a **Submitted** badge.
+- Turn in a second assignment after its due date has passed (or edit the assignment's due date to the past first, then submit) - confirm it shows a **Late** badge instead.
+- From either the queue's quick-review dialog or the full submission page, return one of them - confirm its badge changes to **Returned** and it now counts under the **Returned today** summary tile.
+
+**3. Filters**
+
+- Filter by **Classroom** - confirm the assignment and student dropdowns narrow to just that class's options, and the table only shows that class's rows.
+- Filter by **Status** (Submitted / Late / Returned) one at a time - confirm only matching rows remain.
+- Filter by a specific **Assignment** or **Student** - confirm the table narrows accordingly; clear the filter (back to "All…") and confirm rows return.
+- Set **Due before** to a date before any of your assignments were due - confirm the table empties out and shows the "Nothing to review" empty state.
+
+**4. Sorting**
+
+- Try each sort option - **Newest**, **Oldest**, **Due date**, **Student name**, **Assignment name** - and confirm the row order changes accordingly; click a sortable column header as a shortcut for the same thing.
+
+**5. Actions inline**
+
+- Click **Open** on a submitted row - a dialog opens with the student's work, attachments, and a grade input (bounded by the assignment's points).
+- Enter a grade and feedback, save it, then **Return** the submission from the same dialog - confirm the toast, the badge updating to **Returned**, and that the student sees the grade on their end (sign in as them to confirm).
+- Post a private comment from the dialog - confirm it appears immediately, and that it's the same thread visible on the full submission page (open **Open full page** from the dialog to cross-check).
+
+**6. Cross-classroom scope**
+
+- If the teacher manages more than one classroom, confirm submissions from every one of them appear in the unfiltered queue, not just the first class - this is the entire point of the page versus checking each class's Classwork tab individually.
+- Sign in as the admin (`faizan.admin@gcr.dev`) and visit `/review` - confirm it shows submissions across every active classroom platform-wide, not just ones the admin personally teaches.
 
 ## Admin Platform
 
@@ -347,7 +397,7 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 
 - `src/app`: Next.js App Router routes.
   - `(auth)/login` is public.
-  - `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`, `notifications`, `change-password`).
+  - `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`, `notifications`, `change-password`, `review` - the Teacher Review Queue, additionally gated to Teacher/Admin).
   - `admin` is the `UserRole.ADMIN`-gated console (`users`, `classrooms`, `moderation`, `reports` + six report sub-routes, `audit-logs`, `settings`, `security` + three sub-routes), wrapped in its own shell by `admin/layout.tsx`.
   - `api/auth/[...nextauth]` is the Auth.js route handler.
 - `src/components/ui`: shadcn-style design-system primitives (button, card, table, dialog, alert-dialog, dropdown-menu, sheet, tooltip, input, textarea, select, label, skeleton, badge, avatar, separator) - no domain logic.
@@ -356,10 +406,10 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 - `src/components/page`: page-composition scaffolding - page container, section header, dashboard/stat grids, the shared paginated-table `Pagination` control.
 - `src/components/states`: shared empty/error/loading-skeleton components.
 - `src/components/layouts`: the pre-auth marketing shell used by the public landing page.
-- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Teacher/student-facing: `classroom`, `stream`, `classwork` (topics, materials, assignments, assignment detail), `submissions` (turn-in + grading), `notifications`, `account` (self-service change-password). Admin-facing, under `features/admin/*`: `users`, `classrooms`, `moderation`, `reports` (dashboard analytics + six detailed report generators), `audit-logs`, `settings`, `security`.
+- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Teacher/student-facing: `classroom`, `stream`, `classwork` (topics, materials, assignments, assignment detail), `submissions` (turn-in + grading), `scheduling` (the cross-content-type Draft/Scheduled/Published engine's feature-layer wiring), `review` (the cross-classroom Teacher Review Queue), `notifications`, `account` (self-service change-password). Admin-facing, under `features/admin/*`: `users`, `classrooms`, `moderation`, `reports` (dashboard analytics + six detailed report generators), `audit-logs`, `settings`, `security`.
 - `src/auth`: Auth.js configuration (`index.ts` - credentials provider, login-attempt tracking, auto-lockout, per-session JWT tracking) and the server-side session helper (`session.ts`).
-- `src/lib`: shared utilities - `lib/auth/permissions.ts` (role/ownership authorization helpers), `lib/auth/password.ts` / `lib/password-policy.ts` (hashing + policy enforcement), `lib/audit-log.ts` (the single source of truth for which admin events are tracked, shared by every feature that writes or reads the audit trail), `lib/system-settings.ts` (cached read of the platform settings singleton), `lib/prisma.ts` (Prisma client singleton).
-- `src/proxy.ts`: the renamed Next.js middleware convention - auth gate, admin-route gate, forced-password-change redirect, and per-request session-revocation check.
+- `src/lib`: shared utilities - `lib/auth/permissions.ts` (role/ownership authorization helpers), `lib/auth/password.ts` / `lib/password-policy.ts` (hashing + policy enforcement), `lib/audit-log.ts` (the single source of truth for which admin events are tracked, shared by every feature that writes or reads the audit trail), `lib/system-settings.ts` (cached read of the platform settings singleton), `lib/scheduling` (the content-type-agnostic Draft/Scheduled/Published engine, shared by announcements/assignments/materials), `lib/prisma.ts` (Prisma client singleton).
+- `src/proxy.ts`: the renamed Next.js middleware convention - auth gate, admin-route gate, review-route gate, forced-password-change redirect, and per-request session-revocation check.
 - `src/generated/prisma`: generated Prisma client - do not edit.
 - `src/config`: environment variable parsing/validation.
 - `docs`: project documentation (UI architecture, database architecture, authentication plan).
@@ -405,6 +455,7 @@ Recommended branches:
   - _Assignments_: create/edit/delete with title, instructions, due date, points, topic, and attachments; a draft → scheduled → published → closed lifecycle where drafts and scheduled items are invisible to students, not just visually hidden.
   - _Assignment detail page_: full instructions/attachments, the shared management menu for teachers, and a real submission/grading flow - students turn in text and/or attachments, teachers grade (bounded by the assignment's points) and return work with feedback, and a private comment thread sits alongside each submission.
 - **Content Scheduling** (see [Content Scheduling](#content-scheduling) for the full walkthrough): a single shared engine (`src/lib/scheduling` + `src/features/scheduling`) drives Draft/Scheduled/Published transitions for announcements, assignments, and materials alike - Schedule for later, Cancel scheduled publication, and Publish now Server Actions, with the batch "publish everything due" function already built as the seam a future cron job would call.
+- **Teacher Review Queue** (`/review`, Teacher/Admin-only - see [Teacher Review Queue](#teacher-review-queue) for the full walkthrough): a centralized, cross-classroom list of submissions needing attention (submitted/late/returned), with classroom/assignment/student/status/due-date filters, five sort options, four aggregate summary tiles, and inline Grade/Return/Comment via a dialog that reuses the same review panel as the full submission page.
 - **People module**: classroom roster split into Teachers/Students, an Invite dialog (email or shareable code), role changes (promote/demote co-teacher, transfer ownership), and remove-member - all authorized server-side.
 - **Notifications**: real, database-backed notifications (new assignment/material/announcement, submission returned, private comment) with an unread-count badge and a notification center, generated as a side effect of the actions above.
 - **Admin platform** (`/admin`, `UserRole.ADMIN`-only - see [Admin Platform](#admin-platform) for the full walkthrough): dashboard analytics, user management (create/edit/status/reset password/force password change), classroom administration (archive/restore/delete/transfer ownership/assign teacher), content moderation (archive/delete/restore announcements/comments/materials/assignments), six detailed filterable reports, a full audit log of every administrative action, platform-wide settings (branding, password policy, defaults), and a security dashboard (active sessions, failed logins, account lockouts).
@@ -419,7 +470,6 @@ Still planned / not yet built:
 - Global search (the header search bar is currently UI-only)
 - A dedicated "Archived classes" listing page (the archive/restore action itself already works from the class card menu and from `/admin/classrooms`)
 - A personal account-settings page (`/settings` is referenced in navigation but not yet implemented; self-service password change already exists at `/change-password`)
-- Cross-classroom "To review" queue for teachers
 - Real file storage for uploads (materials/assignments/submissions currently record file metadata only; Supabase Storage is the planned backend)
 - CSV/PDF export for admin reports (the report data layer already returns an export-ready `{ columns, rows }` shape; no exporter is wired up yet, by design)
 - An automatic scheduler (cron job/worker) to call `publishScheduledContent` on an interval (the function itself, and the admin-triggerable Server Action wrapping it, already exist - see [Content Scheduling](#content-scheduling))

@@ -10,11 +10,15 @@ export function ForbiddenToast() {
   const denied = searchParams.get("denied");
 
   useEffect(() => {
-    if (denied !== "admin") {
+    if (denied !== "admin" && denied !== "review") {
       return;
     }
 
-    toast.error("You don't have permission to access the admin area.");
+    toast.error(
+      denied === "admin"
+        ? "You don't have permission to access the admin area."
+        : "The review queue is only available to teachers.",
+    );
 
     const params = new URLSearchParams(searchParams);
     params.delete("denied");

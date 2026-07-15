@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 const publicRoutes = ["/", "/login", "/about"];
 const authRoutes = ["/login"];
 const adminRoute = "/admin";
+const reviewRoute = "/review";
 const changePasswordRoute = "/change-password";
 
 export default async function proxy(request: NextRequest) {
@@ -56,6 +57,12 @@ export default async function proxy(request: NextRequest) {
 
   if (isAdminRoute && token?.role !== "ADMIN") {
     return NextResponse.redirect(new URL("/dashboard?denied=admin", request.url));
+  }
+
+  const isReviewRoute =
+    nextUrl.pathname === reviewRoute || nextUrl.pathname.startsWith(`${reviewRoute}/`);
+  if (isReviewRoute && token?.role !== "TEACHER" && token?.role !== "ADMIN") {
+    return NextResponse.redirect(new URL("/dashboard?denied=review", request.url));
   }
 
   return NextResponse.next();
