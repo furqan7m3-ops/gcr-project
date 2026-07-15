@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import { PageContainer } from "@/components/page/page-container";
 import { SectionHeader } from "@/components/page/section-header";
 import { StudentDashboardView } from "@/features/dashboard/components/student-dashboard-view";
@@ -14,14 +12,12 @@ import { UserRole } from "@/generated/prisma/enums";
 export default async function DashboardPage() {
   const user = await getCurrentUser();
 
-  // Admins have their own dedicated dashboard at /admin (with platform-wide
-  // stats this page has no reason to duplicate) - send them there instead of
-  // rendering a third, redundant "admin view" at this URL too.
-  if (user?.role === UserRole.ADMIN) {
-    redirect("/admin");
-  }
-
-  if (user?.role === UserRole.TEACHER) {
+  // Admins normally live on their dedicated /admin dashboard, but they can
+  // "Exit to app" into this shared shell to browse Classes/Notifications/etc.
+  // like anyone else - redirecting them back to /admin from here would make
+  // that exit impossible. They see the Teacher-style view, since the
+  // underlying queries already bypass to platform-wide data for ADMIN.
+  if (user?.role === UserRole.TEACHER || user?.role === UserRole.ADMIN) {
     const data = await getTeacherDashboardData();
     return (
       <PageContainer>
