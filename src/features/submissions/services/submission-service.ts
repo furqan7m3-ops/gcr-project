@@ -7,7 +7,10 @@ import {
 } from "@/features/classroom/services/classroom-service";
 import { canManageClassroom } from "@/features/classroom/lib/can-manage";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
-import { notifySubmissionReturned } from "@/features/notifications/services/notification-generator";
+import {
+  notifyPrivateComment,
+  notifySubmissionReturned,
+} from "@/features/notifications/services/notification-generator";
 import { getFileAttachmentsByEntityIds, type AttachedFileSummary } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
@@ -423,19 +426,21 @@ export async function removeSubmissionAttachment(
 // scoped to the specific classroom the assignment belongs to.
 // ---------------------------------------------------------------------------
 
-/** Confirms the assignment exists, isn't deleted, and actually belongs to this classroom. */
+/** Confirms the assignment exists, isn't deleted, and actually belongs to this classroom - returns its title for callers that need it (e.g. a notification message) without a second query. */
 async function assertAssignmentInClassroom(
   classroomId: string,
   assignmentId: string,
-): Promise<void> {
+): Promise<{ title: string }> {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
-    select: { classroomId: true, deletedAt: true },
+    select: { classroomId: true, deletedAt: true, title: true },
   });
 
   if (!assignment || assignment.deletedAt || assignment.classroomId !== classroomId) {
     throw new ClassroomServiceError("NOT_FOUND", "Assignment not found.");
   }
+
+  return { title: assignment.title };
 }
 
 type ManagedAssignment = {
@@ -680,7 +685,7 @@ export async function createPrivateComment(
   user: SessionUser,
   content: string,
 ): Promise<PrivateCommentSummary> {
-  await assertAssignmentInClassroom(classroomId, assignmentId);
+  const assignment = await assertAssignmentInClassroom(classroomId, assignmentId);
 
   const isOwner = user.id === studentId;
   if (isOwner) {
@@ -711,6 +716,15 @@ export async function createPrivateComment(
       visibility: CommentVisibility.PRIVATE,
     },
     include: { author: { select: { id: true, name: true, image: true, avatarUrl: true } } },
+  });
+
+  await notifyPrivateComment({
+    classroomId,
+    assignmentId,
+    assignmentTitle: assignment.title,
+    studentId,
+    authorId: user.id,
+    authorIsTeacher: created.authorId !== studentId,
   });
 
   return {

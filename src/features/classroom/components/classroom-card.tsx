@@ -1,5 +1,7 @@
+import { Archive } from "lucide-react";
 import Link from "next/link";
 
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { canManageClassroom } from "../lib/can-manage";
@@ -9,14 +11,29 @@ import { ClassroomQuickActionsMenu } from "./classroom-quick-actions-menu";
 
 export function ClassroomCard({ classroom }: { classroom: ClassroomSummary }) {
   const canManage = canManageClassroom(classroom.role);
+  // /classes deliberately lists active and archived classrooms together (see
+  // listUserClassrooms) - without this badge the two were visually
+  // indistinguishable in the grid, unlike the classroom detail page's header,
+  // which already marks archived state this same way.
+  const isArchived = classroom.status === "ARCHIVED";
 
   return (
     <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
-      <ClassroomCover
-        classroomId={classroom.id}
-        title={classroom.title}
-        section={classroom.section}
-      />
+      <div className="relative">
+        <ClassroomCover
+          classroomId={classroom.id}
+          title={classroom.title}
+          section={classroom.section}
+        />
+        {isArchived ? (
+          <Badge
+            variant="secondary"
+            className="absolute left-3 top-3 gap-1 border-white/30 bg-black/30 text-white"
+          >
+            <Archive className="h-3 w-3" aria-hidden /> Archived
+          </Badge>
+        ) : null}
+      </div>
       <div className="flex items-start justify-between gap-2 px-4 pt-3">
         <Link
           href={`/classes/${classroom.id}`}

@@ -181,6 +181,37 @@ export async function notifySubmissionReturned(params: {
   }
 }
 
+/** Fires when a private comment is posted on a submission - to the student if
+ * a teacher wrote it, or to every manager of the classroom if the student
+ * wrote it (excluding the author either way, so nobody is notified of their
+ * own comment). */
+export async function notifyPrivateComment(params: {
+  classroomId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentId: string;
+  authorId: string;
+  authorIsTeacher: boolean;
+}): Promise<void> {
+  try {
+    const recipientIds = params.authorIsTeacher
+      ? [params.studentId]
+      : await getActiveMemberIds(params.classroomId, {
+          managersOnly: true,
+          excludeUserIds: [params.authorId],
+        });
+
+    await createNotificationsForRecipients(recipientIds, {
+      type: NotificationType.PRIVATE_COMMENT,
+      title: "New private comment",
+      message: `You have a new private comment on "${params.assignmentTitle}".`,
+      link: `/classes/${params.classroomId}/classwork/${params.assignmentId}`,
+    });
+  } catch (error) {
+    console.error("notifyPrivateComment failed:", error);
+  }
+}
+
 /** Fires once per invitation, to the specific teacher who sent it - gated on
  * the invitation transitioning out of PENDING, so it can never double-fire
  * for the same invitation. */

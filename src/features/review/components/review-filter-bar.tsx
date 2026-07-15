@@ -46,13 +46,25 @@ export function ReviewFilterBar({ filterOptions }: ReviewFilterBarProps) {
     [filterOptions.assignments, classroomId],
   );
 
-  const visibleStudents = useMemo(
-    () =>
-      classroomId
-        ? filterOptions.students.filter((student) => student.classroomId === classroomId)
-        : filterOptions.students,
-    [filterOptions.students, classroomId],
-  );
+  const visibleStudents = useMemo(() => {
+    const matching = classroomId
+      ? filterOptions.students.filter((student) => student.classroomId === classroomId)
+      : filterOptions.students;
+
+    // filterOptions.students has one row per (student, classroom) membership -
+    // needed so the classroom-scoped filter above works, but a student in
+    // several manageable classrooms would otherwise appear once per
+    // classroom in the unscoped "All classrooms" dropdown, with duplicate
+    // option keys/values as a result.
+    const seen = new Set<string>();
+    return matching.filter((student) => {
+      if (seen.has(student.id)) {
+        return false;
+      }
+      seen.add(student.id);
+      return true;
+    });
+  }, [filterOptions.students, classroomId]);
 
   function updateParams(updates: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
