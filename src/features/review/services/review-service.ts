@@ -34,7 +34,7 @@ const REVIEW_STATUSES = [
  * rule used by hasManagementAccess() for a single classroom. Archived/deleted
  * classrooms are excluded, since their content is read-only everywhere else.
  */
-async function getManageableClassrooms(
+export async function getManageableClassrooms(
   user: SessionUser,
 ): Promise<{ id: string; title: string }[]> {
   if (user.role === UserRole.ADMIN) {
@@ -206,7 +206,8 @@ interface SummaryRawRow {
  * since an aggregate COUNT doesn't have the same fetch-then-filter option
  * the row-level query uses for display purposes.
  */
-async function getSummary(classroomIds: string[]): Promise<ReviewQueueSummary> {
+/** Exported for reuse by the dashboard feature's "Review Queue Summary" tile - same four aggregate counts, no row/filter-option fetching. */
+export async function getReviewSummary(classroomIds: string[]): Promise<ReviewQueueSummary> {
   if (classroomIds.length === 0) {
     return { pendingReviews: 0, lateSubmissions: 0, returnedToday: 0, recentlySubmitted: 0 };
   }
@@ -312,7 +313,7 @@ export async function getTeacherReviewQueue(
         student: { select: { id: true, name: true, image: true, avatarUrl: true } },
       },
     }),
-    getSummary(manageableClassroomIds),
+    getReviewSummary(manageableClassroomIds),
     getFilterOptions(manageableClassroomIds),
   ]);
 

@@ -156,6 +156,51 @@ export async function listClassroomAssignments(
   );
 }
 
+/**
+ * The soonest-due Published assignments across the given classrooms - backs
+ * the Student dashboard's "Upcoming Deadlines" list. Only ever queries
+ * PUBLISHED assignments (never DRAFT/SCHEDULED), so it can't leak content a
+ * student isn't meant to see yet - the same visibility rule already enforced
+ * everywhere else, just expressed directly in this query's WHERE clause
+ * rather than filtered after the fact.
+ */
+export async function getUpcomingDeadlines(
+  classroomIds: string[],
+  limit = 5,
+): Promise<
+  { id: string; title: string; classroomId: string; classroomTitle: string; dueDate: Date }[]
+> {
+  if (classroomIds.length === 0) {
+    return [];
+  }
+
+  const assignments = await prisma.assignment.findMany({
+    where: {
+      classroomId: { in: classroomIds },
+      deletedAt: null,
+      status: AssignmentStatus.PUBLISHED,
+      dueDate: { gte: new Date() },
+    },
+    select: {
+      id: true,
+      title: true,
+      classroomId: true,
+      dueDate: true,
+      classroom: { select: { title: true } },
+    },
+    orderBy: { dueDate: "asc" },
+    take: limit,
+  });
+
+  return assignments.map((assignment) => ({
+    id: assignment.id,
+    title: assignment.title,
+    classroomId: assignment.classroomId,
+    classroomTitle: assignment.classroom.title,
+    dueDate: assignment.dueDate as Date,
+  }));
+}
+
 export async function createAssignment(
   classroomId: string,
   user: SessionUser,

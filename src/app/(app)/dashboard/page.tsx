@@ -1,29 +1,47 @@
-import { BookOpen, CalendarDays, ClipboardList, Users } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { StatGrid } from "@/components/page/dashboard-grid";
 import { PageContainer } from "@/components/page/page-container";
 import { SectionHeader } from "@/components/page/section-header";
-import { StatCard } from "@/components/page/stat-card";
-import { EmptyState } from "@/components/states/empty-state";
+import { StudentDashboardView } from "@/features/dashboard/components/student-dashboard-view";
+import { TeacherDashboardView } from "@/features/dashboard/components/teacher-dashboard-view";
+import {
+  getStudentDashboardData,
+  getTeacherDashboardData,
+} from "@/features/dashboard/queries/dashboard-queries";
+import { getCurrentUser } from "@/auth/session";
+import { UserRole } from "@/generated/prisma/enums";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+
+  // Admins have their own dedicated dashboard at /admin (with platform-wide
+  // stats this page has no reason to duplicate) - send them there instead of
+  // rendering a third, redundant "admin view" at this URL too.
+  if (user?.role === UserRole.ADMIN) {
+    redirect("/admin");
+  }
+
+  if (user?.role === UserRole.TEACHER) {
+    const data = await getTeacherDashboardData();
+    return (
+      <PageContainer>
+        <SectionHeader
+          title="Dashboard"
+          description="Your classes, review queue, and upcoming content at a glance."
+        />
+        <TeacherDashboardView data={data} />
+      </PageContainer>
+    );
+  }
+
+  const data = await getStudentDashboardData();
   return (
     <PageContainer>
       <SectionHeader
         title="Dashboard"
-        description="A shared overview surface for teachers, students, and admins."
+        description="Your classes, upcoming deadlines, and archived classes at a glance."
       />
-      <StatGrid>
-        <StatCard label="Active classes" value="—" icon={BookOpen} />
-        <StatCard label="Upcoming events" value="—" icon={CalendarDays} />
-        <StatCard label="Pending work" value="—" icon={ClipboardList} />
-        <StatCard label="People" value="—" icon={Users} />
-      </StatGrid>
-      <EmptyState
-        icon={BookOpen}
-        title="No classes yet"
-        description="Once classroom features ship, your classes will appear here."
-      />
+      <StudentDashboardView data={data} />
     </PageContainer>
   );
 }

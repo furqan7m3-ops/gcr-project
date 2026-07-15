@@ -229,6 +229,43 @@ export async function listArchivedClassrooms(user: SessionUser): Promise<Classro
   return memberships.map((membership) => toClassroomSummary(membership.classroom, membership.role));
 }
 
+/**
+ * Count-only variant of listArchivedClassrooms - for dashboard stat tiles
+ * that only need a number, not the full classroom+owner join. Same
+ * ADMIN-bypass rule as every other archived-classroom lookup.
+ */
+export async function countArchivedClassrooms(user: SessionUser): Promise<number> {
+  if (user.role === UserRole.ADMIN) {
+    return prisma.classroom.count({ where: { status: ClassroomStatus.ARCHIVED } });
+  }
+
+  return prisma.classroomMembership.count({
+    where: {
+      userId: user.id,
+      status: ClassroomMembershipStatus.ACTIVE,
+      classroom: { status: ClassroomStatus.ARCHIVED },
+    },
+  });
+}
+
+/**
+ * Ids only, for cheaply scoping other aggregate queries (e.g. a student's
+ * upcoming-deadlines lookup) to "classrooms this user is currently an
+ * active member of" without pulling the full classroom+owner join.
+ */
+export async function listActiveClassroomIds(userId: string): Promise<string[]> {
+  const memberships = await prisma.classroomMembership.findMany({
+    where: {
+      userId,
+      status: ClassroomMembershipStatus.ACTIVE,
+      classroom: { status: ClassroomStatus.ACTIVE },
+    },
+    select: { classroomId: true },
+  });
+
+  return memberships.map((membership) => membership.classroomId);
+}
+
 export async function getClassroomForUser(
   classroomId: string,
   user: SessionUser,
