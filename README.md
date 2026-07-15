@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), a centralized Teacher Review Queue (see [Teacher Review Queue](#teacher-review-queue) below), a fully read-only Archived Classroom Experience (see [Archived Classroom Experience](#archived-classroom-experience) below), role-specific Dashboard Enhancements tying all of the above together (see [Dashboard Enhancements](#dashboard-enhancements) below), a reusable, authorization-aware Global Search Infrastructure (backend only so far - see [Global Search Infrastructure](#global-search-infrastructure) below), and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar and a global search UI are the remaining missing pieces.
+GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), a centralized Teacher Review Queue (see [Teacher Review Queue](#teacher-review-queue) below), a fully read-only Archived Classroom Experience (see [Archived Classroom Experience](#archived-classroom-experience) below), role-specific Dashboard Enhancements tying all of the above together (see [Dashboard Enhancements](#dashboard-enhancements) below), a reusable, authorization-aware Global Search feature spanning both the backend service (see [Global Search Infrastructure](#global-search-infrastructure) below) and a full search UI - dialog, results page, recent searches, keyboard shortcut (see [Global Search Experience](#global-search-experience) below) - and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar is the remaining missing piece.
 
 ## Architecture
 
@@ -381,7 +381,7 @@ Sign in as the teacher (`daniel.teacher@gcr.dev`) unless a step says otherwise -
 
 ## Global Search Infrastructure
 
-The backend for cross-application search (`src/features/search`) - a shared, authorization-aware search service, ready for a future search box to call. **There is no search UI wired up yet** - the header search bar (`src/components/shell/search-bar.tsx`) is still the same plain, non-functional input it's always been, by design (this phase was infrastructure only). Everything below is verified via a script or by calling the exported functions directly, not by clicking anything.
+The backend for cross-application search (`src/features/search`) - a shared, authorization-aware search service. It now powers a full search UI - see [Global Search Experience](#global-search-experience) below for the user-facing dialog/results page and its manual testing walkthrough. Everything in this section is instead about the service layer itself, verified via a script or by calling the exported functions directly, not by clicking anything - useful if you're changing the service and want to confirm scoping/authorization without going through the UI.
 
 - **What's searchable**: Classrooms (title/section/subject), Announcements (title/content), Assignments (title/description), Materials (title/description), and - Admin only - Users (name/email). Adding a new searchable entity means adding one function to `search-service.ts`; the scoping, merging, and counting pipeline around it is entity-agnostic.
 - **Authorization-aware, not filtered after the fact**: a new `getClassroomSearchScope(user)` helper (`classroom-service.ts`) computes, in one query, which classrooms a user manages (full visibility, drafts/scheduled included) versus is only a plain member of (published-only visibility) - the exact same per-classroom rule every feature already enforces individually, just applied across every classroom the viewer can see at once. Archived classrooms are deliberately **included** in scope (only soft-deleted ones are excluded) - archived content stays readable (see [Archived Classroom Experience](#archived-classroom-experience)), so it must stay findable too. Admins bypass membership entirely and search platform-wide, the same convention used everywhere else in the app.
@@ -390,7 +390,7 @@ The backend for cross-application search (`src/features/search`) - a shared, aut
 
 ### Global search infrastructure manual testing walkthrough
 
-Since there's no UI yet, "manual testing" here means calling the service directly with a throwaway script, the same way this phase was verified during development. Run these from the project root with the dev database up (`docker compose up -d`).
+This walkthrough tests the service layer directly with a throwaway script rather than through the UI, the same way this phase was verified during development - useful for confirming scoping/authorization in isolation. For the click-through version, see [Global Search Experience](#global-search-experience) instead. Run these from the project root with the dev database up (`docker compose up -d`).
 
 **1. Set up a throwaway verification script**
 
@@ -420,6 +420,61 @@ Since there's no UI yet, "manual testing" here means calling the service directl
 **5. Clean up**
 
 - Delete the test announcement/assignment/material created in step 2 and remove the throwaway script - the feature itself adds no new routes or UI, so there's nothing else to reset.
+
+## Global Search Experience
+
+The user-facing layer on top of the search service above (`src/features/search/components`, `src/features/search/context`, and `src/app/(app)/search`) - a command-palette-style dialog and a dedicated results page, both reading from the exact same `getSearchResults()`/`search()` pipeline described in [Global Search Infrastructure](#global-search-infrastructure), so anything true about scoping/authorization there is true here too.
+
+- **Opening it**: click the search bar in the header (desktop), the magnifying-glass icon in the header (mobile, replaces the search bar below the `md` breakpoint), or press **Ctrl + K** (**⌘K** on Mac) from anywhere in the app - the shortcut is a global listener mounted once at the shell level, not tied to any particular page.
+- **The dialog**: a top-anchored modal with a single search input. Typing debounces (300ms) before it queries, and results are grouped by type (Classrooms, Announcements, Assignments, Materials, Topics, Users) with an icon per type and the matched text highlighted inline (`<mark>`) in both the title and description.
+- **Recent searches**: shown in the dialog when the input is empty and you have search history - stored in `localStorage`, namespaced per signed-in user, capped at 8 entries, most-recent-first, with a **Clear** link. Click one to re-run it instantly.
+- **Loading / empty / no-results states**: a skeleton list while a query is in flight, a "Search GCR" placeholder (or your recent searches) when the input is empty, and an explicit "No results for '...'" message with a suggestion to try a different term when a query returns nothing.
+- **Results page (`/search?q=...`)**: press **Enter** in the dialog, or click **View all results for "..."**, to land on a full page with the same grouped/highlighted results (a higher per-type limit than the dialog), plus filter chips (**All** and one per entity type, each showing a count) that toggle `?type=` without losing the query.
+- **Reuse, not duplication**: a single `SearchResultRow` component renders every result identically in both the dialog and the results page; a single `HighlightMatch` component does the highlighting in both places too.
+
+### Global search experience manual testing walkthrough
+
+Sign in as any seed account (teacher, student, or admin) - see [Get a working login](#get-a-working-login) if that account still needs its password patched. Search results always respect the same authorization scoping as [Global Search Infrastructure](#global-search-infrastructure) (e.g. a student never sees a teacher's draft assignment, and only an admin's search includes Users).
+
+**1. Opening the dialog**
+
+- Click the search bar in the header - the dialog opens centered near the top of the screen with the input already focused.
+- Close it (click outside, or press `Esc`), then press **Ctrl + K** (**⌘K** on Mac) - confirm it opens the same dialog from anywhere, including from deep inside a classroom page, not just from `/dashboard`.
+- Press **Ctrl + K** again while it's open - confirm it closes (the shortcut toggles).
+- Narrow the browser to a phone-sized viewport - confirm the header search bar disappears and a magnifying-glass icon appears instead; click it and confirm it opens the same dialog.
+
+**2. Empty state and recent searches**
+
+- Open the dialog fresh (or clear any existing search history for this browser) - confirm it shows a "Search GCR" placeholder with no results list.
+- Type a searchable query (2+ characters, e.g. part of a classroom name like "Advanced"), let results load, then either press **Enter** or click a result to close the dialog.
+- Reopen the dialog - confirm your previous query now appears under **Recent searches**. Click it - confirm it re-populates the input and re-runs the search immediately.
+- Repeat with a few different queries, then click **Clear** next to "Recent searches" - confirm the list empties and the placeholder returns.
+
+**3. Loading, results, and highlighting**
+
+- Type a query slowly, letter by letter - confirm there's a brief debounce before anything happens (it shouldn't query on every keystroke), then a loading skeleton appears briefly before results replace it.
+- Confirm results are grouped under headings (Classrooms, Announcements, Assignments, Materials, Topics, and - admin only - Users), each with a type-specific icon.
+- Confirm the part of the title/description matching your query is visually highlighted (e.g. type "math" and confirm "Math" is highlighted inside "Advanced **Math**ematics 101").
+- Type a query with no matches anywhere (e.g. a random string like "zzznotreal") - confirm a "No results for '...'" message appears instead of an empty list with no explanation.
+
+**4. Results page**
+
+- With a query typed in the dialog, press **Enter** (not clicking a specific result) - confirm you land on `/search?q=<your query>` showing the same grouped, highlighted results in a full page.
+- Click one of the filter chips (e.g. **Assignments**) - confirm the URL updates to include `&type=assignment` and only assignment results remain, with that chip now visually active; click **All** to go back to every type.
+- Visit `/search` directly with no `?q=` - confirm it shows a "Type something to search" prompt rather than an empty results list or an error.
+- Visit `/search?q=zzznotreal` directly - confirm the same "No results" message from the dialog appears here too.
+- From the dialog, click **View all results for "..."** instead of pressing Enter - confirm it navigates to the same results page and the query you typed is preserved.
+
+**5. Recent searches persist correctly per user**
+
+- Search for something distinctive as the teacher, then sign out and sign in as the student - confirm the student's recent searches list does **not** include the teacher's query (it's namespaced per user in `localStorage`).
+
+**6. Authorization scoping, via the UI this time**
+
+- As a student, search for a draft assignment's title that a teacher created but hasn't published yet - confirm it does not appear in either the dialog or the results page.
+- As that teacher (who manages the classroom), search the same title - confirm the draft assignment now appears.
+- As a non-admin (teacher or student), confirm no **Users** group ever appears in your search results, no matter what you search for.
+- As the admin, search for another user's name or email - confirm a **Users** group appears and clicking a result takes you to `/admin/users?q=<their email>`.
 
 ## Admin Platform
 
@@ -535,7 +590,7 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 
 - `src/app`: Next.js App Router routes.
   - `(auth)/login` is public.
-  - `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`, `archived` - the "Archived classes" listing, `notifications`, `settings` - profile + password, `change-password`, `review` - the Teacher Review Queue, additionally gated to Teacher/Admin).
+  - `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`, `archived` - the "Archived classes" listing, `notifications`, `settings` - profile + password, `change-password`, `review` - the Teacher Review Queue, additionally gated to Teacher/Admin, `search` - the global search results page).
   - `admin` is the `UserRole.ADMIN`-gated console (`users`, `classrooms`, `moderation`, `reports` + six report sub-routes, `audit-logs`, `settings`, `security` + three sub-routes), wrapped in its own shell by `admin/layout.tsx`.
   - `api/auth/[...nextauth]` is the Auth.js route handler.
 - `src/components/ui`: shadcn-style design-system primitives (button, card, table, dialog, alert-dialog, dropdown-menu, sheet, tooltip, input, textarea, select, label, skeleton, badge, avatar, separator) - no domain logic.
@@ -544,7 +599,7 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 - `src/components/page`: page-composition scaffolding - page container, section header, dashboard/stat grids, the shared paginated-table `Pagination` control.
 - `src/components/states`: shared empty/error/loading-skeleton components.
 - `src/components/layouts`: the pre-auth marketing shell used by the public landing page.
-- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Teacher/student-facing: `classroom`, `stream`, `classwork` (topics, materials, assignments, assignment detail), `submissions` (turn-in + grading), `scheduling` (the cross-content-type Draft/Scheduled/Published engine's feature-layer wiring), `review` (the cross-classroom Teacher Review Queue), `dashboard` (the role-specific `/dashboard` and `/admin` views, composed from the other features' existing services), `search` (the shared, authorization-aware global search service - backend only, no UI yet), `notifications`, `account` (self-service change-password). Admin-facing, under `features/admin/*`: `users`, `classrooms`, `moderation`, `reports` (dashboard analytics + six detailed report generators), `audit-logs`, `settings`, `security`.
+- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Teacher/student-facing: `classroom`, `stream`, `classwork` (topics, materials, assignments, assignment detail), `submissions` (turn-in + grading), `scheduling` (the cross-content-type Draft/Scheduled/Published engine's feature-layer wiring), `review` (the cross-classroom Teacher Review Queue), `dashboard` (the role-specific `/dashboard` and `/admin` views, composed from the other features' existing services), `search` (the shared, authorization-aware global search service plus its UI - dialog, context/keyboard-shortcut provider, results page components), `notifications`, `account` (self-service change-password). Admin-facing, under `features/admin/*`: `users`, `classrooms`, `moderation`, `reports` (dashboard analytics + six detailed report generators), `audit-logs`, `settings`, `security`.
 - `src/auth`: Auth.js configuration (`index.ts` - credentials provider, login-attempt tracking, auto-lockout, per-session JWT tracking) and the server-side session helper (`session.ts`).
 - `src/lib`: shared utilities - `lib/auth/permissions.ts` (role/ownership authorization helpers), `lib/auth/password.ts` / `lib/password-policy.ts` (hashing + policy enforcement), `lib/audit-log.ts` (the single source of truth for which admin events are tracked, shared by every feature that writes or reads the audit trail), `lib/system-settings.ts` (cached read of the platform settings singleton), `lib/scheduling` (the content-type-agnostic Draft/Scheduled/Published engine, shared by announcements/assignments/materials), `lib/prisma.ts` (Prisma client singleton).
 - `src/proxy.ts`: the renamed Next.js middleware convention - auth gate, admin-route gate, review-route gate, forced-password-change redirect, and per-request session-revocation check.
@@ -596,7 +651,7 @@ Recommended branches:
 - **Teacher Review Queue** (`/review`, Teacher/Admin-only - see [Teacher Review Queue](#teacher-review-queue) for the full walkthrough): a centralized, cross-classroom list of submissions needing attention (submitted/late/returned), with classroom/assignment/student/status/due-date filters, five sort options, four aggregate summary tiles, and inline Grade/Return/Comment via a dialog that reuses the same review panel as the full submission page.
 - **Archived Classroom Experience** (see [Archived Classroom Experience](#archived-classroom-experience) for the full walkthrough): archiving a classroom makes it genuinely read-only - every content-mutating Server Action across classroom/stream/classwork/submissions/invitations is independently blocked server-side via one shared `assertClassroomActive` guard, with matching UI (archived badge/banner, Restore action, disabled compose/invite/management controls) so the interface never dangles a control the server would reject.
 - **Dashboard Enhancements** (see [Dashboard Enhancements](#dashboard-enhancements) for the full walkthrough): `/dashboard` now renders a genuinely role-specific view for Teachers (Review queue summary, Scheduled content, Upcoming publications) and Students (Upcoming deadlines, Archived classes), and `/admin` is a real, fully wired dashboard (previously a static placeholder) with platform-wide Archived classroom and Scheduled content statistics plus a Platform activity feed - built by composing existing, already-tested components and queries rather than duplicating them.
-- **Global Search Infrastructure** (see [Global Search Infrastructure](#global-search-infrastructure) for the full walkthrough): a shared, authorization-aware search service across classrooms/announcements/assignments/materials (plus users, Admin-only) - backend and a reusable debounced hook only, no search UI wired up yet.
+- **Global Search** (see [Global Search Infrastructure](#global-search-infrastructure) and [Global Search Experience](#global-search-experience) for the full walkthroughs): a shared, authorization-aware search service across classrooms/announcements/assignments/materials/topics (plus users, Admin-only), plus the full user-facing UI - a Ctrl/Cmd+K command-palette dialog with recent searches and highlighted matches, and a dedicated `/search` results page with type filter chips.
 - **People module**: classroom roster split into Teachers/Students, an Invite dialog (email or shareable code), role changes (promote/demote co-teacher, transfer ownership), and remove-member - all authorized server-side.
 - **Notifications**: real, database-backed notifications (new assignment/material/announcement, submission returned, private comment) with an unread-count badge and a notification center, generated as a side effect of the actions above.
 - **Admin platform** (`/admin`, `UserRole.ADMIN`-only - see [Admin Platform](#admin-platform) for the full walkthrough): dashboard analytics, user management (create/edit/status/reset password/force password change), classroom administration (archive/restore/delete/transfer ownership/assign teacher), content moderation (archive/delete/restore announcements/comments/materials/assignments), six detailed filterable reports, a full audit log of every administrative action, platform-wide settings (branding, password policy, defaults), and a security dashboard (active sessions, failed logins, account lockouts).
@@ -608,7 +663,6 @@ Recommended branches:
 Still planned / not yet built:
 
 - Calendar (due dates across classes)
-- Global search UI (the search service/action/debounced hook already exist and are fully authorization-aware - see [Global Search Infrastructure](#global-search-infrastructure) - but the header search bar is still a plain, unwired input; no results dropdown or results page has been built yet)
 - Real file storage for uploads (materials/assignments/submissions currently record file metadata only; Supabase Storage is the planned backend)
 - CSV/PDF export for admin reports (the report data layer already returns an export-ready `{ columns, rows }` shape; no exporter is wired up yet, by design)
 - An automatic scheduler (cron job/worker) to call `publishScheduledContent` on an interval (the function itself, and the admin-triggerable Server Action wrapping it, already exist - see [Content Scheduling](#content-scheduling))
