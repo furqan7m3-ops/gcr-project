@@ -60,6 +60,7 @@ enum InvitationType {
 
 enum AnnouncementStatus {
   DRAFT
+  SCHEDULED
   PUBLISHED
 }
 
@@ -71,8 +72,15 @@ enum MaterialType {
   OTHER
 }
 
+enum MaterialStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+}
+
 enum AssignmentStatus {
   DRAFT
+  SCHEDULED
   PUBLISHED
   CLOSED
 }
@@ -168,6 +176,9 @@ model User {
   updatedSystemSettings SystemSettings[]       @relation("SystemSettingsUpdatedBy")
   loginAttempts         LoginAttempt[]
   loginSessions         UserLoginSession[]
+  publishedAnnouncements Announcement[]        @relation("AnnouncementPublishedBy")
+  publishedMaterials    Material[]             @relation("MaterialPublishedBy")
+  publishedAssignments  Assignment[]           @relation("AssignmentPublishedBy")
 
   @@index([role])
   @@index([status])
@@ -363,6 +374,12 @@ model Announcement {
   status        AnnouncementStatus @default(PUBLISHED)
   moderationStatus ModerationStatus @default(ACTIVE)
   isPinned      Boolean           @default(false)
+  // Scheduling (Phase 14.1): scheduledFor is set only while status is
+  // SCHEDULED; publishedAt/publishedById record how the content actually
+  // became visible (immediate publish, a scheduled publish, or "publish now").
+  scheduledFor  DateTime?
+  publishedAt   DateTime?
+  publishedById String?           @db.Uuid
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   deletedAt     DateTime?
@@ -370,7 +387,10 @@ model Announcement {
   // Announcements are classroom-level posts and can have comments and attachments.
   classroom     Classroom         @relation(fields: [classroomId], references: [id], onDelete: Cascade)
   author        User              @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  publishedBy   User?             @relation("AnnouncementPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
   comments      Comment[]         @relation("AnnouncementComments")
+
+  @@index([status, scheduledFor])
 
   @@index([classroomId, createdAt])
   @@index([authorId])
@@ -385,7 +405,12 @@ model Material {
   description   String?     @db.Text
   url           String?
   type          MaterialType @default(DOCUMENT)
+  status        MaterialStatus @default(PUBLISHED)
   moderationStatus ModerationStatus @default(ACTIVE)
+  // Scheduling (Phase 14.1) - see Announcement.scheduledFor for field semantics.
+  scheduledFor  DateTime?
+  publishedAt   DateTime?
+  publishedById String?     @db.Uuid
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   deletedAt     DateTime?
@@ -394,10 +419,12 @@ model Material {
   classroom     Classroom   @relation(fields: [classroomId], references: [id], onDelete: Cascade)
   topic         Topic?      @relation(fields: [topicId], references: [id], onDelete: SetNull)
   author        User        @relation("MaterialAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  publishedBy   User?       @relation("MaterialPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
 
   @@index([classroomId, createdAt])
   @@index([topicId])
   @@index([authorId])
+  @@index([status, scheduledFor])
 }
 
 model Assignment {
@@ -412,6 +439,10 @@ model Assignment {
   dueDate             DateTime?
   points              Int?
   allowLateSubmission Boolean          @default(true)
+  // Scheduling (Phase 14.1) - see Announcement.scheduledFor for field semantics.
+  scheduledFor        DateTime?
+  publishedAt         DateTime?
+  publishedById       String?          @db.Uuid
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   deletedAt           DateTime?
@@ -420,11 +451,13 @@ model Assignment {
   classroom           Classroom        @relation(fields: [classroomId], references: [id], onDelete: Cascade)
   topic               Topic?           @relation(fields: [topicId], references: [id], onDelete: SetNull)
   author              User             @relation("AssignmentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  publishedBy          User?           @relation("AssignmentPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
   submissions         Submission[]
 
   @@index([classroomId, dueDate])
   @@index([topicId])
   @@index([authorId])
+  @@index([status, scheduledFor])
 }
 
 model Submission {

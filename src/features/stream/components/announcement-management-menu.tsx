@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarX,
+  MoreVertical,
+  Pencil,
+  Pin,
+  PinOff,
+  Send,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +23,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScheduleDialog } from "@/features/scheduling/components/schedule-dialog";
+import { useContentScheduling } from "@/features/scheduling/hooks/use-content-scheduling";
+import { toDatetimeLocalValue } from "@/features/scheduling/lib/schedule-format";
 import { usePendingAction } from "@/hooks/use-pending-action";
 
 import { deleteAnnouncementAction, setAnnouncementPinnedAction } from "../actions/stream-mutations";
@@ -32,6 +44,7 @@ export function AnnouncementManagementMenu({
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const scheduling = useContentScheduling("announcement", announcement.id);
 
   const pin = usePendingAction(
     () => setAnnouncementPinnedAction(classroomId, announcement.id, !announcement.isPinned),
@@ -67,10 +80,33 @@ export function AnnouncementManagementMenu({
           <DropdownMenuItem onSelect={() => setEditOpen(true)}>
             <Pencil /> Edit
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={pin.run} disabled={pin.isPending}>
-            {announcement.isPinned ? <PinOff /> : <Pin />}
-            {announcement.isPinned ? "Unpin" : "Pin"}
-          </DropdownMenuItem>
+          {announcement.status === "PUBLISHED" ? (
+            <DropdownMenuItem onSelect={pin.run} disabled={pin.isPending}>
+              {announcement.isPinned ? <PinOff /> : <Pin />}
+              {announcement.isPinned ? "Unpin" : "Pin"}
+            </DropdownMenuItem>
+          ) : null}
+          {announcement.status === "DRAFT" || announcement.status === "SCHEDULED" ? (
+            <DropdownMenuItem
+              onSelect={scheduling.publishImmediately}
+              disabled={scheduling.isPending}
+            >
+              <Send /> Publish now
+            </DropdownMenuItem>
+          ) : null}
+          {announcement.status === "DRAFT" ? (
+            <DropdownMenuItem
+              onSelect={scheduling.openScheduleDialog}
+              disabled={scheduling.isPending}
+            >
+              <CalendarClock /> Schedule…
+            </DropdownMenuItem>
+          ) : null}
+          {announcement.status === "SCHEDULED" ? (
+            <DropdownMenuItem onSelect={scheduling.cancelSchedule} disabled={scheduling.isPending}>
+              <CalendarX /> Cancel scheduled publication
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => setDeleteOpen(true)}
@@ -86,6 +122,14 @@ export function AnnouncementManagementMenu({
         announcement={announcement}
         open={editOpen}
         onOpenChange={setEditOpen}
+      />
+
+      <ScheduleDialog
+        open={scheduling.scheduleDialogOpen}
+        onOpenChange={scheduling.closeScheduleDialog}
+        defaultValue={toDatetimeLocalValue(announcement.scheduledFor)}
+        pending={scheduling.isPending}
+        onConfirm={scheduling.confirmSchedule}
       />
 
       <ConfirmDialog

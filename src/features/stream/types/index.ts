@@ -1,6 +1,7 @@
 import type { AttachedFileSummary } from "@/lib/file-attachments";
 
 export type { ActionResult } from "@/types/action-result";
+export type { AnnouncementStatus } from "@/generated/prisma/enums";
 
 export type AnnouncementAttachmentSummary = AttachedFileSummary;
 
@@ -24,6 +25,8 @@ export interface AnnouncementSummary {
   createdAt: Date;
   isEdited: boolean;
   isPinned: boolean;
+  status: "DRAFT" | "SCHEDULED" | "PUBLISHED";
+  scheduledFor: Date | null;
   author: {
     name: string;
     image: string | null;

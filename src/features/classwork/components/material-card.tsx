@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MaterialType } from "@/generated/prisma/enums";
+import { ContentStatusBadge } from "@/features/scheduling/components/content-status-badge";
 
 import type { MaterialSummary, TopicSummary } from "../types";
 import { MaterialManagementMenu } from "./material-management-menu";
@@ -32,7 +33,10 @@ export function MaterialCard({ material, classroomId, topics }: MaterialCardProp
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="truncate text-sm font-medium text-foreground">{material.title}</p>
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium text-foreground">{material.title}</p>
+            <ContentStatusBadge status={material.status} scheduledFor={material.scheduledFor} />
+          </div>
           {material.description ? (
             <p className="line-clamp-2 text-xs text-muted-foreground">{material.description}</p>
           ) : null}

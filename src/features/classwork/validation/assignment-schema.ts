@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+import {
+  createContentStatusField,
+  refineScheduledFor,
+  scheduledForField,
+} from "@/lib/scheduling/schedule-validation";
+
 import { optionalTrimmed, topicIdField } from "./shared";
 
 const dueDateField = z
@@ -30,17 +36,20 @@ const titleField = z
   .min(1, "Title can't be empty.")
   .max(150, "Title must be at most 150 characters.");
 
-export const createAssignmentSchema = z.object({
-  classroomId: z.string().uuid("Invalid classroom id."),
-  title: titleField,
-  description: optionalTrimmed(5000, "Instructions"),
-  dueDate: dueDateField,
-  points: pointsField,
-  topicId: topicIdField,
-  // Creation only allows Draft or Published - Closed only makes sense as a
-  // transition from an already-published assignment.
-  status: z.enum(["DRAFT", "PUBLISHED"]),
-});
+export const createAssignmentSchema = z
+  .object({
+    classroomId: z.string().uuid("Invalid classroom id."),
+    title: titleField,
+    description: optionalTrimmed(5000, "Instructions"),
+    dueDate: dueDateField,
+    points: pointsField,
+    topicId: topicIdField,
+    // Creation only allows Draft, Scheduled, or Published - Closed only
+    // makes sense as a transition from an already-published assignment.
+    status: createContentStatusField,
+    scheduledFor: scheduledForField,
+  })
+  .superRefine(refineScheduledFor);
 
 export type CreateAssignmentInput = z.infer<typeof createAssignmentSchema>;
 

@@ -2,6 +2,7 @@ import { Paperclip, Pin } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { ContentStatusBadge } from "@/features/scheduling/components/content-status-badge";
 import { getInitials } from "@/lib/utils";
 
 import type { AnnouncementSummary } from "../types";
@@ -68,6 +69,7 @@ export function AnnouncementCard({
             Pinned
           </span>
         ) : null}
+        <ContentStatusBadge status={announcement.status} scheduledFor={announcement.scheduledFor} />
         {announcement.canManage ? (
           <AnnouncementManagementMenu classroomId={classroomId} announcement={announcement} />
         ) : null}

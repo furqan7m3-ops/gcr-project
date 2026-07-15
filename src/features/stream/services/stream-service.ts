@@ -3,6 +3,7 @@ import {
   assertManagementAccess,
   assertMembership,
   hasManagementAccess,
+  loadActiveClassroom,
 } from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { notifyAnnouncementPublished } from "@/features/notifications/services/notification-generator";
@@ -17,6 +18,7 @@ import {
   CommentVisibility,
   FileAttachmentType,
 } from "@/generated/prisma/enums";
+import type { ScheduleAdapter, SchedulableRecord } from "@/lib/scheduling/types";
 
 import type { AnnouncementAttachmentSummary, AnnouncementSummary, CommentSummary } from "../types";
 
@@ -75,6 +77,8 @@ function toAnnouncementSummary(
     isEdited:
       announcement.updatedAt.getTime() - announcement.createdAt.getTime() > EDITED_THRESHOLD_MS,
     isPinned: announcement.isPinned,
+    status: announcement.status,
+    scheduledFor: announcement.scheduledFor,
     author: {
       name: announcement.author.name,
       image: announcement.author.image ?? announcement.author.avatarUrl ?? null,
@@ -87,14 +91,14 @@ function toAnnouncementSummary(
   };
 }
 
+// Used by update/delete/pin, all of which require management access
+// immediately afterward - so draft and scheduled announcements are fine to
+// load here too (a manager needs to be able to edit content before it
+// publishes). createComment has its own, stricter PUBLISHED-only lookup below.
 async function findActiveAnnouncementOrThrow(announcementId: string) {
   const announcement = await prisma.announcement.findUnique({ where: { id: announcementId } });
 
-  if (
-    !announcement ||
-    announcement.deletedAt ||
-    announcement.status !== AnnouncementStatus.PUBLISHED
-  ) {
+  if (!announcement || announcement.deletedAt) {
     throw new ClassroomServiceError("NOT_FOUND", "Announcement not found.");
   }
 
@@ -117,18 +121,19 @@ export async function listClassroomAnnouncements(
   classroomId: string,
   viewer: SessionUser,
 ): Promise<AnnouncementSummary[]> {
-  const [announcements, canModerate] = await Promise.all([
-    prisma.announcement.findMany({
-      where: {
-        classroomId,
-        status: AnnouncementStatus.PUBLISHED,
-        deletedAt: null,
-      },
-      include: announcementWithRelationsInclude(),
-      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
-    }),
-    hasManagementAccess(classroomId, viewer),
-  ]);
+  const canModerate = await hasManagementAccess(classroomId, viewer);
+
+  const announcements = await prisma.announcement.findMany({
+    where: {
+      classroomId,
+      deletedAt: null,
+      // Draft/Scheduled announcements are only visible to whoever manages
+      // this classroom - students never see content before it publishes.
+      ...(canModerate ? {} : { status: AnnouncementStatus.PUBLISHED }),
+    },
+    include: announcementWithRelationsInclude(),
+    orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+  });
 
   if (announcements.length === 0) {
     return [];
@@ -153,6 +158,11 @@ export async function createAnnouncement(
   classroomId: string,
   user: SessionUser,
   content: string,
+  status:
+    | typeof AnnouncementStatus.DRAFT
+    | typeof AnnouncementStatus.SCHEDULED
+    | typeof AnnouncementStatus.PUBLISHED,
+  scheduledFor: Date | null,
 ): Promise<AnnouncementSummary> {
   const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
 
@@ -176,15 +186,20 @@ export async function createAnnouncement(
     authorId: user.id,
     title: deriveTitleFromContent(content),
     content,
-    status: AnnouncementStatus.PUBLISHED,
+    status,
+    scheduledFor: status === AnnouncementStatus.SCHEDULED ? scheduledFor : null,
+    publishedAt: status === AnnouncementStatus.PUBLISHED ? new Date() : null,
+    publishedById: status === AnnouncementStatus.PUBLISHED ? user.id : null,
   });
 
-  await notifyAnnouncementPublished({
-    classroomId,
-    classroomTitle: classroom.title,
-    authorId: user.id,
-    announcementContent: content,
-  });
+  if (status === AnnouncementStatus.PUBLISHED) {
+    await notifyAnnouncementPublished({
+      classroomId,
+      classroomTitle: classroom.title,
+      authorId: user.id,
+      announcementContent: content,
+    });
+  }
 
   return toAnnouncementSummary(created, [], user.id, true);
 }
@@ -335,3 +350,104 @@ export async function deleteComment(commentId: string, user: SessionUser): Promi
     data: { deletedAt: new Date() },
   });
 }
+
+interface SchedulableAnnouncement extends SchedulableRecord {
+  title: string;
+}
+
+function toSchedulableAnnouncement(announcement: {
+  id: string;
+  classroomId: string;
+  status: AnnouncementStatus;
+  scheduledFor: Date | null;
+  publishedAt: Date | null;
+  title: string;
+}): SchedulableAnnouncement {
+  return {
+    id: announcement.id,
+    classroomId: announcement.classroomId,
+    status: announcement.status,
+    scheduledFor: announcement.scheduledFor,
+    publishedAt: announcement.publishedAt,
+    title: announcement.title,
+  };
+}
+
+/**
+ * Bridges Announcement to the shared scheduling engine (src/lib/scheduling).
+ * This is the only place Prisma specifics for announcement scheduling live -
+ * scheduleContent/cancelScheduledPublication/publishNow/publishScheduledContent
+ * all operate purely in terms of this adapter.
+ */
+export const announcementScheduleAdapter: ScheduleAdapter<SchedulableAnnouncement> = {
+  contentType: "announcement",
+
+  async findById(id) {
+    const announcement = await prisma.announcement.findUnique({ where: { id } });
+    if (!announcement || announcement.deletedAt) {
+      return null;
+    }
+    return toSchedulableAnnouncement(announcement);
+  },
+
+  async findDueForPublishing(now) {
+    const announcements = await prisma.announcement.findMany({
+      where: {
+        status: AnnouncementStatus.SCHEDULED,
+        scheduledFor: { lte: now },
+        deletedAt: null,
+      },
+    });
+    return announcements.map(toSchedulableAnnouncement);
+  },
+
+  async assertSchedulable(record) {
+    const classroom = await loadActiveClassroom(record.classroomId);
+    if (classroom.status === ClassroomStatus.ARCHIVED) {
+      throw new ClassroomServiceError(
+        "ARCHIVED",
+        "This class is archived and its announcements can't be scheduled or published.",
+      );
+    }
+  },
+
+  async updateSchedule(id, input) {
+    await prisma.announcement.update({
+      where: { id },
+      data: {
+        status:
+          input.status === "SCHEDULED" ? AnnouncementStatus.SCHEDULED : AnnouncementStatus.DRAFT,
+        scheduledFor: input.scheduledFor,
+      },
+    });
+  },
+
+  async publish(id, publishedById, publishedAt) {
+    const updated = await prisma.announcement.update({
+      where: { id },
+      data: {
+        status: AnnouncementStatus.PUBLISHED,
+        scheduledFor: null,
+        publishedAt,
+        publishedById,
+      },
+    });
+    return toSchedulableAnnouncement(updated);
+  },
+
+  async afterPublish(record) {
+    const announcement = await prisma.announcement.findUnique({
+      where: { id: record.id },
+      include: { classroom: { select: { title: true } } },
+    });
+    if (!announcement) {
+      return;
+    }
+    await notifyAnnouncementPublished({
+      classroomId: announcement.classroomId,
+      classroomTitle: announcement.classroom.title,
+      authorId: announcement.authorId,
+      announcementContent: announcement.content,
+    });
+  },
+};

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -17,20 +17,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PublishControls,
+  type PublishMode,
+} from "@/features/scheduling/components/publish-controls";
+import { toDatetimeLocalValue } from "@/features/scheduling/lib/schedule-format";
 
 import { createAssignmentAction, updateAssignmentAction } from "../actions/assignment-mutations";
 import type { ActionResult, AssignmentSummary, TopicSummary } from "../types";
 
 const initialState: ActionResult<AssignmentSummary> | null = null;
-
-function toDatetimeLocalValue(date: Date | null | undefined): string {
-  if (!date) {
-    return "";
-  }
-
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 interface AssignmentFormDialogProps {
   mode: "create" | "edit";
@@ -53,6 +49,8 @@ export function AssignmentFormDialog({
   const action = mode === "create" ? createAssignmentAction : updateAssignmentAction;
   const [state, formAction, isPending] = useActionState(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
+  const [publishMode, setPublishMode] = useState<PublishMode>("DRAFT");
+  const [scheduledFor, setScheduledFor] = useState("");
 
   useEffect(() => {
     if (!state) {
@@ -180,6 +178,18 @@ export function AssignmentFormDialog({
                 </p>
               </div>
             ) : null}
+
+            {mode === "create" ? (
+              <PublishControls
+                mode={publishMode}
+                onModeChange={setPublishMode}
+                scheduledFor={scheduledFor}
+                onScheduledForChange={setScheduledFor}
+                fieldError={fieldErrors?.scheduledFor?.[0]}
+                disabled={isPending}
+                publishLabel="Assign"
+              />
+            ) : null}
           </div>
 
           <DialogFooter>
@@ -191,26 +201,17 @@ export function AssignmentFormDialog({
             >
               Cancel
             </Button>
-            {mode === "create" ? (
-              <>
-                <Button
-                  type="submit"
-                  name="status"
-                  value="DRAFT"
-                  variant="secondary"
-                  disabled={isPending}
-                >
-                  {isPending ? "Saving…" : "Save draft"}
-                </Button>
-                <Button type="submit" name="status" value="PUBLISHED" disabled={isPending}>
-                  {isPending ? "Assigning…" : "Assign"}
-                </Button>
-              </>
-            ) : (
-              <Button type="submit" disabled={isPending}>
-                {isPending ? "Saving…" : "Save"}
-              </Button>
-            )}
+            <Button type="submit" disabled={isPending}>
+              {isPending
+                ? "Saving…"
+                : mode === "edit"
+                  ? "Save"
+                  : publishMode === "DRAFT"
+                    ? "Save draft"
+                    : publishMode === "SCHEDULED"
+                      ? "Schedule"
+                      : "Assign"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

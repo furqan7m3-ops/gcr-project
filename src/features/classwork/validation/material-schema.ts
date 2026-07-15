@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+import {
+  createContentStatusField,
+  refineScheduledFor,
+  scheduledForField,
+} from "@/lib/scheduling/schedule-validation";
+
 import { optionalTrimmed, topicIdField } from "./shared";
 
 const urlField = z
@@ -14,7 +20,7 @@ const urlField = z
     message: "URL must start with http:// or https://.",
   });
 
-export const createMaterialSchema = z.object({
+const baseMaterialSchema = z.object({
   classroomId: z.string().uuid("Invalid classroom id."),
   title: z
     .string()
@@ -26,9 +32,16 @@ export const createMaterialSchema = z.object({
   topicId: topicIdField,
 });
 
+export const createMaterialSchema = baseMaterialSchema
+  .extend({
+    status: createContentStatusField,
+    scheduledFor: scheduledForField,
+  })
+  .superRefine(refineScheduledFor);
+
 export type CreateMaterialInput = z.infer<typeof createMaterialSchema>;
 
-export const updateMaterialSchema = createMaterialSchema.extend({
+export const updateMaterialSchema = baseMaterialSchema.extend({
   materialId: z.string().uuid("Invalid material id."),
 });
 

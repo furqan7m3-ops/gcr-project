@@ -4,12 +4,20 @@ import type { SessionUser } from "@/auth/session";
 import {
   assertManagementAccess,
   hasManagementAccess,
+  loadActiveClassroom,
 } from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
+import { notifyMaterialPublished } from "@/features/notifications/services/notification-generator";
 import { getFileAttachmentsByEntityIds } from "@/lib/file-attachments";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { ClassroomStatus, FileAttachmentType, MaterialType } from "@/generated/prisma/enums";
+import {
+  ClassroomStatus,
+  FileAttachmentType,
+  MaterialStatus,
+  MaterialType,
+} from "@/generated/prisma/enums";
+import type { ScheduleAdapter, SchedulableRecord } from "@/lib/scheduling/types";
 
 import { assertTopicBelongsToClassroom } from "./topic-service";
 import type { MaterialAttachedFile, MaterialSummary } from "../types";
@@ -54,6 +62,8 @@ function toMaterialSummary(
     description: material.description,
     url: material.url,
     type: material.type,
+    status: material.status,
+    scheduledFor: material.scheduledFor,
     topicId: material.topicId,
     authorName: material.author.name,
     createdAt: material.createdAt,
@@ -92,14 +102,19 @@ export async function listClassroomMaterials(
   classroomId: string,
   viewer: SessionUser,
 ): Promise<MaterialSummary[]> {
-  const [materials, canManage] = await Promise.all([
-    prisma.material.findMany({
-      where: { classroomId, deletedAt: null },
-      include: materialWithAuthorInclude(),
-      orderBy: { createdAt: "desc" },
-    }),
-    hasManagementAccess(classroomId, viewer),
-  ]);
+  const canManage = await hasManagementAccess(classroomId, viewer);
+
+  const materials = await prisma.material.findMany({
+    where: {
+      classroomId,
+      deletedAt: null,
+      // Draft/Scheduled materials are only visible to whoever manages this
+      // classroom - students never see content before it publishes.
+      ...(canManage ? {} : { status: MaterialStatus.PUBLISHED }),
+    },
+    include: materialWithAuthorInclude(),
+    orderBy: { createdAt: "desc" },
+  });
 
   if (materials.length === 0) {
     return [];
@@ -120,6 +135,11 @@ export async function createMaterial(
   user: SessionUser,
   input: MaterialInput,
   fileMetas: FileMeta[],
+  status:
+    | typeof MaterialStatus.DRAFT
+    | typeof MaterialStatus.SCHEDULED
+    | typeof MaterialStatus.PUBLISHED = MaterialStatus.PUBLISHED,
+  scheduledFor: Date | null = null,
 ): Promise<MaterialSummary> {
   const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
 
@@ -152,6 +172,10 @@ export async function createMaterial(
         description: input.description ?? null,
         url: input.url ?? null,
         type,
+        status,
+        scheduledFor: status === MaterialStatus.SCHEDULED ? scheduledFor : null,
+        publishedAt: status === MaterialStatus.PUBLISHED ? new Date() : null,
+        publishedById: status === MaterialStatus.PUBLISHED ? user.id : null,
       },
       include: materialWithAuthorInclude(),
     });
@@ -180,6 +204,15 @@ export async function createMaterial(
 
     return material;
   });
+
+  if (status === MaterialStatus.PUBLISHED) {
+    await notifyMaterialPublished({
+      classroomId,
+      classroomTitle: classroom.title,
+      authorId: user.id,
+      materialTitle: created.title,
+    });
+  }
 
   const attachmentsByMaterialId = await getFileAttachmentsByEntityIds(
     [created.id],
@@ -223,3 +256,98 @@ export async function deleteMaterial(materialId: string, user: SessionUser): Pro
     data: { deletedAt: new Date() },
   });
 }
+
+interface SchedulableMaterial extends SchedulableRecord {
+  title: string;
+}
+
+function toSchedulableMaterial(material: {
+  id: string;
+  classroomId: string;
+  status: MaterialStatus;
+  scheduledFor: Date | null;
+  publishedAt: Date | null;
+  title: string;
+}): SchedulableMaterial {
+  return {
+    id: material.id,
+    classroomId: material.classroomId,
+    status: material.status,
+    scheduledFor: material.scheduledFor,
+    publishedAt: material.publishedAt,
+    title: material.title,
+  };
+}
+
+/** Bridges Material to the shared scheduling engine - see stream-service.ts's adapter for the counterpart. */
+export const materialScheduleAdapter: ScheduleAdapter<SchedulableMaterial> = {
+  contentType: "material",
+
+  async findById(id) {
+    const material = await prisma.material.findUnique({ where: { id } });
+    if (!material || material.deletedAt) {
+      return null;
+    }
+    return toSchedulableMaterial(material);
+  },
+
+  async findDueForPublishing(now) {
+    const materials = await prisma.material.findMany({
+      where: {
+        status: MaterialStatus.SCHEDULED,
+        scheduledFor: { lte: now },
+        deletedAt: null,
+      },
+    });
+    return materials.map(toSchedulableMaterial);
+  },
+
+  async assertSchedulable(record) {
+    const classroom = await loadActiveClassroom(record.classroomId);
+    if (classroom.status === ClassroomStatus.ARCHIVED) {
+      throw new ClassroomServiceError(
+        "ARCHIVED",
+        "This class is archived and its materials can't be scheduled or published.",
+      );
+    }
+  },
+
+  async updateSchedule(id, input) {
+    await prisma.material.update({
+      where: { id },
+      data: {
+        status: input.status === "SCHEDULED" ? MaterialStatus.SCHEDULED : MaterialStatus.DRAFT,
+        scheduledFor: input.scheduledFor,
+      },
+    });
+  },
+
+  async publish(id, publishedById, publishedAt) {
+    const updated = await prisma.material.update({
+      where: { id },
+      data: {
+        status: MaterialStatus.PUBLISHED,
+        scheduledFor: null,
+        publishedAt,
+        publishedById,
+      },
+    });
+    return toSchedulableMaterial(updated);
+  },
+
+  async afterPublish(record) {
+    const material = await prisma.material.findUnique({
+      where: { id: record.id },
+      include: { classroom: { select: { title: true } } },
+    });
+    if (!material) {
+      return;
+    }
+    await notifyMaterialPublished({
+      classroomId: material.classroomId,
+      classroomTitle: material.classroom.title,
+      authorId: material.authorId,
+      materialTitle: material.title,
+    });
+  },
+};

@@ -129,6 +129,28 @@ export async function notifyAssignmentPublished(params: {
   }
 }
 
+/** Fires when a material becomes visible to the classroom - mirrors notifyAssignmentPublished. */
+export async function notifyMaterialPublished(params: {
+  classroomId: string;
+  classroomTitle: string;
+  authorId: string;
+  materialTitle: string;
+}): Promise<void> {
+  try {
+    const recipientIds = await getActiveMemberIds(params.classroomId, {
+      excludeUserIds: [params.authorId],
+    });
+    await createNotificationsForRecipients(recipientIds, {
+      type: NotificationType.NEW_MATERIAL,
+      title: `New material in ${params.classroomTitle}`,
+      message: `"${params.materialTitle}" was just posted.`,
+      link: `/classes/${params.classroomId}/classwork`,
+    });
+  } catch (error) {
+    console.error("notifyMaterialPublished failed:", error);
+  }
+}
+
 /** Fires exactly once, at return time - never at grade-entry time. A grade
  * stays invisible to the student until the submission is returned (see
  * submission-service.ts), so notifying earlier would leak that a grade

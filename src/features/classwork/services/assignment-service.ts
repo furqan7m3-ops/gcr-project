@@ -4,6 +4,7 @@ import type { SessionUser } from "@/auth/session";
 import {
   assertManagementAccess,
   hasManagementAccess,
+  loadActiveClassroom,
 } from "@/features/classroom/services/classroom-service";
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { notifyAssignmentPublished } from "@/features/notifications/services/notification-generator";
@@ -17,6 +18,7 @@ import {
   ClassroomStatus,
   FileAttachmentType,
 } from "@/generated/prisma/enums";
+import type { ScheduleAdapter, SchedulableRecord } from "@/lib/scheduling/types";
 
 import { assertTopicBelongsToClassroom } from "./topic-service";
 import type { AssignmentSummary } from "../types";
@@ -54,6 +56,7 @@ function toAssignmentSummary(
     title: assignment.title,
     description: assignment.description,
     status: assignment.status,
+    scheduledFor: assignment.scheduledFor,
     dueDate: assignment.dueDate,
     points: assignment.points,
     topicId: assignment.topicId,
@@ -96,8 +99,13 @@ export async function getAssignmentForUser(
 
   const canManage = await hasManagementAccess(assignment.classroomId, viewer);
 
-  // Drafts don't exist yet as far as students are concerned - hide, don't forbid.
-  if (!canManage && assignment.status === AssignmentStatus.DRAFT) {
+  // Drafts and scheduled assignments don't exist yet as far as students are
+  // concerned - hide, don't forbid.
+  if (
+    !canManage &&
+    (assignment.status === AssignmentStatus.DRAFT ||
+      assignment.status === AssignmentStatus.SCHEDULED)
+  ) {
     throw new ClassroomServiceError("NOT_FOUND", "Assignment not found.");
   }
 
@@ -151,8 +159,12 @@ export async function createAssignment(
   classroomId: string,
   user: SessionUser,
   input: AssignmentInput,
-  status: typeof AssignmentStatus.DRAFT | typeof AssignmentStatus.PUBLISHED,
+  status:
+    | typeof AssignmentStatus.DRAFT
+    | typeof AssignmentStatus.SCHEDULED
+    | typeof AssignmentStatus.PUBLISHED,
   fileMetas: FileMeta[],
+  scheduledFor: Date | null = null,
 ): Promise<AssignmentSummary> {
   const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
 
@@ -184,6 +196,9 @@ export async function createAssignment(
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         points: input.points ? Number(input.points) : null,
         status,
+        scheduledFor: status === AssignmentStatus.SCHEDULED ? scheduledFor : null,
+        publishedAt: status === AssignmentStatus.PUBLISHED ? new Date() : null,
+        publishedById: status === AssignmentStatus.PUBLISHED ? user.id : null,
       },
       include: assignmentWithAuthorInclude(),
     });
@@ -256,27 +271,9 @@ export async function updateAssignment(
   return toAssignmentSummary(updated, attachmentsByAssignmentId.get(assignmentId) ?? [], true);
 }
 
-export async function publishAssignment(assignmentId: string, user: SessionUser): Promise<void> {
-  const existing = await findActiveAssignmentOrThrow(assignmentId);
-  await assertManagementAccess(existing.classroomId, user);
-
-  if (existing.status !== AssignmentStatus.DRAFT) {
-    throw new ClassroomServiceError("VALIDATION_ERROR", "Only draft assignments can be published.");
-  }
-
-  await prisma.assignment.update({
-    where: { id: assignmentId },
-    data: { status: AssignmentStatus.PUBLISHED },
-  });
-
-  await notifyAssignmentPublished({
-    classroomId: existing.classroomId,
-    classroomTitle: existing.classroom.title,
-    authorId: user.id,
-    assignmentId: existing.id,
-    assignmentTitle: existing.title,
-  });
-}
+// Publishing a draft/scheduled assignment immediately now goes through the
+// shared scheduling engine's publishNow() + assignmentScheduleAdapter below,
+// rather than a dedicated function here - see src/features/scheduling.
 
 export async function closeAssignment(assignmentId: string, user: SessionUser): Promise<void> {
   const existing = await findActiveAssignmentOrThrow(assignmentId);
@@ -313,3 +310,107 @@ export async function deleteAssignment(assignmentId: string, user: SessionUser):
     classroomId: existing.classroomId,
   });
 }
+
+interface SchedulableAssignment extends SchedulableRecord {
+  title: string;
+}
+
+function toSchedulableAssignment(assignment: {
+  id: string;
+  classroomId: string;
+  status: AssignmentStatus;
+  scheduledFor: Date | null;
+  publishedAt: Date | null;
+  title: string;
+}): SchedulableAssignment {
+  return {
+    id: assignment.id,
+    classroomId: assignment.classroomId,
+    status: assignment.status,
+    scheduledFor: assignment.scheduledFor,
+    publishedAt: assignment.publishedAt,
+    title: assignment.title,
+  };
+}
+
+/** Bridges Assignment to the shared scheduling engine - see stream-service.ts's adapter for the counterpart. */
+export const assignmentScheduleAdapter: ScheduleAdapter<SchedulableAssignment> = {
+  contentType: "assignment",
+
+  async findById(id) {
+    const assignment = await prisma.assignment.findUnique({ where: { id } });
+    if (!assignment || assignment.deletedAt) {
+      return null;
+    }
+    return toSchedulableAssignment(assignment);
+  },
+
+  async findDueForPublishing(now) {
+    const assignments = await prisma.assignment.findMany({
+      where: {
+        status: AssignmentStatus.SCHEDULED,
+        scheduledFor: { lte: now },
+        deletedAt: null,
+      },
+    });
+    return assignments.map(toSchedulableAssignment);
+  },
+
+  async assertSchedulable(record) {
+    // Closed assignments can never be (re-)scheduled - they're a terminal state.
+    if (record.status === AssignmentStatus.CLOSED) {
+      throw new ClassroomServiceError(
+        "VALIDATION_ERROR",
+        "Closed assignments can't be scheduled or published.",
+      );
+    }
+
+    const classroom = await loadActiveClassroom(record.classroomId);
+    if (classroom.status === ClassroomStatus.ARCHIVED) {
+      throw new ClassroomServiceError(
+        "ARCHIVED",
+        "This class is archived and its assignments can't be scheduled or published.",
+      );
+    }
+  },
+
+  async updateSchedule(id, input) {
+    await prisma.assignment.update({
+      where: { id },
+      data: {
+        status: input.status === "SCHEDULED" ? AssignmentStatus.SCHEDULED : AssignmentStatus.DRAFT,
+        scheduledFor: input.scheduledFor,
+      },
+    });
+  },
+
+  async publish(id, publishedById, publishedAt) {
+    const updated = await prisma.assignment.update({
+      where: { id },
+      data: {
+        status: AssignmentStatus.PUBLISHED,
+        scheduledFor: null,
+        publishedAt,
+        publishedById,
+      },
+    });
+    return toSchedulableAssignment(updated);
+  },
+
+  async afterPublish(record) {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: record.id },
+      include: { classroom: { select: { title: true } } },
+    });
+    if (!assignment) {
+      return;
+    }
+    await notifyAssignmentPublished({
+      classroomId: assignment.classroomId,
+      classroomTitle: assignment.classroom.title,
+      authorId: assignment.authorId,
+      assignmentId: assignment.id,
+      assignmentTitle: assignment.title,
+    });
+  },
+};

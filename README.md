@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar, a global search, an "Archived classes" listing page, and a personal account-settings page are the remaining UI-only or missing pieces.
+GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar, a global search, an "Archived classes" listing page, and a personal account-settings page are the remaining UI-only or missing pieces.
 
 ## Architecture
 
@@ -167,9 +167,10 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 
 - As the teacher, use **+ Create → Assignment**, fill in title/instructions/due date/points/topic/attachments, and click **Save draft** - it appears in the list with a **Draft** badge, visible only to you.
 - As the student, confirm the draft assignment does not appear in the Classwork list at all.
-- Back as the teacher, open the assignment's management menu and **Publish** it - the student now sees it (no badge).
+- Back as the teacher, open the assignment's management menu and **Publish now** - the student now sees it (no badge).
 - Try **Close assignment**, **Edit**, and **Delete** from the same menu - each works with the expected confirmation/toast behavior.
 - As the student, confirm no management menu appears on any assignment card.
+- See [Content Scheduling](#content-scheduling) below for the Schedule/Cancel-scheduled-publication flow shared by announcements, assignments, and materials.
 
 **10. Classwork - assignment detail page, submissions & grading**
 
@@ -182,6 +183,55 @@ A step-by-step path through everything currently implemented. Useful for anyone 
 **11. Responsive check**
 
 - Repeat steps 3-10 with the browser narrowed to a phone-sized viewport (or DevTools device mode) - the drawer nav, dialogs, and comment threads should all remain usable.
+
+## Content Scheduling
+
+Announcements, assignments, and materials all share one scheduling engine rather than three separate implementations. Every piece of content moves through the same status lifecycle - **Draft → Scheduled → Published** (assignments add a fourth, terminal **Closed** state, unrelated to scheduling) - and the same three teacher-facing actions apply everywhere: **Schedule for later**, **Cancel scheduled publication**, and **Publish now**.
+
+- **Create time**: the create dialog/composer for each content type has a shared "Save as draft / Publish now / Schedule for later" control. Choosing **Schedule for later** reveals a date & time picker; the content is created straight into the Scheduled state.
+- **Managing existing drafts**: a draft or scheduled item's management menu offers **Publish now**, **Schedule…** (drafts only) or **Cancel scheduled publication** (scheduled items only), alongside the existing Edit/Delete.
+- **Visibility**: Draft and Scheduled content is only visible to whoever manages that classroom (teacher/co-teacher/admin) - students never see it until it actually publishes, the same rule already used for draft assignments.
+- **Guardrails**: content in an archived classroom can't be scheduled or published; a closed assignment can never be (re-)scheduled; a scheduled time must be in the future.
+- **Status badges**: cards show a **Draft**, **Scheduled** (with the publish date/time), or **Closed** badge; published content shows no badge, matching the existing convention.
+- **Architecture**: the shared engine (`src/lib/scheduling`) knows nothing about Prisma or any specific content type - each feature (`stream`, `classwork`) implements a small adapter bridging its own model to the engine. `publishScheduledContent` (the function a future cron job/worker would call on an interval) is already wired up as an admin-triggerable Server Action; nothing about the manual "Schedule for later" flow will need to change once that automatic trigger is added.
+
+### Content scheduling manual testing walkthrough
+
+A step-by-step path through the scheduling flow for all three content types. Sign in as the teacher (`daniel.teacher@gcr.dev`) unless a step says otherwise - see [Get a working login](#get-a-working-login) if that account still needs its password patched.
+
+**1. Draft → Schedule → Cancel → Reschedule → Publish now (announcements)**
+
+- Open **Stream**, and in the composer choose **Schedule for later** instead of the default **Publish now** - a date & time picker appears; pick a time a few minutes out and submit.
+- Confirm the announcement now shows a **Scheduled** badge with the date/time you picked, and that it's still visible to you (the manager).
+- Open a private/incognito window and sign in as the student (`sofia.student@gcr.dev`) - confirm the scheduled announcement does **not** appear on the Stream at all.
+- Back as the teacher, open the announcement's **⋮** menu and choose **Cancel scheduled publication** - the badge changes to **Draft** and the scheduled time is cleared.
+- Open the **⋮** menu again and choose **Schedule…** - pick a new date/time and confirm; the badge returns to **Scheduled** with the new time.
+- Finally, choose **Publish now** from the same menu - the badge disappears (published content shows no badge), and refreshing the student's window now shows the announcement.
+
+**2. Assignments - scheduling respects Draft/Scheduled/Published/Closed**
+
+- In **Classwork**, use **+ Create → Assignment**, fill in the details, and this time choose **Schedule for later** in the create dialog's publish controls, picking a future date/time, then submit.
+- Confirm it appears in your list with a **Scheduled** badge, and that the student's Classwork list doesn't show it at all (same rule as Draft).
+- From its management menu, try **Publish now** - it should publish immediately, badge disappears, and it becomes visible to the student.
+- **Close** the assignment from the same menu, then try to re-open its menu - **Schedule…** and **Publish now** should no longer be offered at all, since a closed assignment is a terminal state and can never be (re-)scheduled.
+- Create a second assignment as a plain **Save draft**, then use **Schedule…** from its management menu (rather than at create time) to verify rescheduling an existing draft works the same way as the create-time flow.
+
+**3. Materials - scheduling is a brand-new capability here**
+
+- In **Classwork**, use **+ Create → Material**, add a link or description, and choose **Schedule for later** - materials previously had no draft/scheduled concept at all, so confirm this now behaves exactly like announcements/assignments: a **Scheduled** badge, invisible to the student, manageable via **Publish now** / **Schedule…** / **Cancel scheduled publication** from its **⋮** menu.
+
+**4. Guardrails**
+
+- Archive a classroom (from its card's **⋮** menu, or `/admin/classrooms`) that still has a draft item in it, then try to **Schedule…** or **Publish now** that item - it should fail with an "This class is archived…" error instead of silently succeeding.
+- Restore the classroom afterward so the rest of the walkthrough still works.
+
+**5. Notifications**
+
+- When an item transitions to Published - whether by **Publish now** or by letting a schedule complete (see below) - confirm the student receives the same "New announcement/assignment/material in <class>" notification (bell icon) they'd get from an immediate, non-scheduled post.
+
+**6. Confirming a real scheduled publish (optional, no UI trigger yet)**
+
+- The batch function that would let a cron job publish everything past its scheduled time (`publishScheduledContent`) exists as a Server Action but is intentionally not wired to any UI button or automatic timer yet (see [Content Scheduling](#content-scheduling)) - there is nothing to click here. If you want to see it fire, schedule an item for a time a minute in the future, wait, and re-visit the page: it will still show as **Scheduled** until something actually calls that batch function (a future cron job, once added).
 
 ## Admin Platform
 
@@ -348,12 +398,13 @@ Recommended branches:
 - **Authentication & session security**: Auth.js credentials provider, JWT sessions, Prisma adapter, `/login` form, `proxy.ts`-enforced route protection, per-attempt login tracking, auto-lockout after 5 consecutive failures, forced password-change flow, and revocable per-session tracking (a `UserLoginSession` row per sign-in, checked on every request, so a specific session can be terminated despite JWTs otherwise being stateless).
 - **Application shell**: responsive header, collapsible desktop sidebar, mobile drawer navigation, breadcrumbs, user/notifications menus, page-composition primitives, empty/loading/error states - plus a parallel shell for the admin console.
 - **Classroom module**: create/edit/archive a classroom (Teacher/Admin), join/leave by class code (any authenticated user), classroom list ("My Classrooms" cards), classroom detail shell with Stream/Classwork/People tab navigation.
-- **Stream module**: announcements (create/edit/delete/pin/unpin, Teacher/Admin only, students read-only), pinned-first ordering, comments on announcements (create by any member, delete own, teacher/manager can delete any) with optimistic UI, confirmation dialogs on destructive actions, toast notifications throughout.
+- **Stream module**: announcements (create/edit/delete/pin/unpin, Teacher/Admin only, students read-only), draft/scheduled/published lifecycle (see Content Scheduling), pinned-first ordering, comments on announcements (create by any member, delete own, teacher/manager can delete any) with optimistic UI, confirmation dialogs on destructive actions, toast notifications throughout.
 - **Classwork module**:
   - _Topics_: create, rename, delete, and drag-and-drop reorder (Teacher/Admin only; students read-only).
-  - _Materials_: metadata-only uploads, link/URL materials (auto-typed as video/link), file attachments, optional topic assignment.
-  - _Assignments_: create/edit/delete with title, instructions, due date, points, topic, and attachments; a draft → published → closed lifecycle where drafts are invisible to students, not just visually hidden.
+  - _Materials_: metadata-only uploads, link/URL materials (auto-typed as video/link), file attachments, optional topic assignment, and a draft/scheduled/published lifecycle (see Content Scheduling).
+  - _Assignments_: create/edit/delete with title, instructions, due date, points, topic, and attachments; a draft → scheduled → published → closed lifecycle where drafts and scheduled items are invisible to students, not just visually hidden.
   - _Assignment detail page_: full instructions/attachments, the shared management menu for teachers, and a real submission/grading flow - students turn in text and/or attachments, teachers grade (bounded by the assignment's points) and return work with feedback, and a private comment thread sits alongside each submission.
+- **Content Scheduling** (see [Content Scheduling](#content-scheduling) for the full walkthrough): a single shared engine (`src/lib/scheduling` + `src/features/scheduling`) drives Draft/Scheduled/Published transitions for announcements, assignments, and materials alike - Schedule for later, Cancel scheduled publication, and Publish now Server Actions, with the batch "publish everything due" function already built as the seam a future cron job would call.
 - **People module**: classroom roster split into Teachers/Students, an Invite dialog (email or shareable code), role changes (promote/demote co-teacher, transfer ownership), and remove-member - all authorized server-side.
 - **Notifications**: real, database-backed notifications (new assignment/material/announcement, submission returned, private comment) with an unread-count badge and a notification center, generated as a side effect of the actions above.
 - **Admin platform** (`/admin`, `UserRole.ADMIN`-only - see [Admin Platform](#admin-platform) for the full walkthrough): dashboard analytics, user management (create/edit/status/reset password/force password change), classroom administration (archive/restore/delete/transfer ownership/assign teacher), content moderation (archive/delete/restore announcements/comments/materials/assignments), six detailed filterable reports, a full audit log of every administrative action, platform-wide settings (branding, password policy, defaults), and a security dashboard (active sessions, failed logins, account lockouts).
@@ -371,6 +422,7 @@ Still planned / not yet built:
 - Cross-classroom "To review" queue for teachers
 - Real file storage for uploads (materials/assignments/submissions currently record file metadata only; Supabase Storage is the planned backend)
 - CSV/PDF export for admin reports (the report data layer already returns an export-ready `{ columns, rows }` shape; no exporter is wired up yet, by design)
+- An automatic scheduler (cron job/worker) to call `publishScheduledContent` on an interval (the function itself, and the admin-triggerable Server Action wrapping it, already exist - see [Content Scheduling](#content-scheduling))
 
 ## Deployment
 

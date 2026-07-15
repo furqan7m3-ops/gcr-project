@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Award, CalendarClock, ClipboardList } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { ContentStatusBadge } from "@/features/scheduling/components/content-status-badge";
 
 import { formatDueDate } from "../lib/format-assignment";
 import type { AssignmentSummary, TopicSummary } from "../types";
@@ -33,11 +33,7 @@ export function AssignmentCard({ assignment, classroomId, topics }: AssignmentCa
             >
               {assignment.title}
             </Link>
-            {assignment.status !== "PUBLISHED" ? (
-              <Badge variant={assignment.status === "CLOSED" ? "secondary" : "outline"}>
-                {assignment.status === "CLOSED" ? "Closed" : "Draft"}
-              </Badge>
-            ) : null}
+            <ContentStatusBadge status={assignment.status} scheduledFor={assignment.scheduledFor} />
           </div>
 
           {assignment.description ? (

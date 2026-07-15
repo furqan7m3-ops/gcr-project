@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -17,6 +17,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PublishControls,
+  type PublishMode,
+} from "@/features/scheduling/components/publish-controls";
 
 import { createMaterialAction, updateMaterialAction } from "../actions/material-mutations";
 import type { ActionResult, MaterialSummary, TopicSummary } from "../types";
@@ -44,6 +48,8 @@ export function MaterialFormDialog({
   const action = mode === "create" ? createMaterialAction : updateMaterialAction;
   const [state, formAction, isPending] = useActionState(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
+  const [publishMode, setPublishMode] = useState<PublishMode>("PUBLISHED");
+  const [scheduledFor, setScheduledFor] = useState("");
 
   useEffect(() => {
     if (!state) {
@@ -151,6 +157,18 @@ export function MaterialFormDialog({
                 </p>
               </div>
             ) : null}
+
+            {mode === "create" ? (
+              <PublishControls
+                mode={publishMode}
+                onModeChange={setPublishMode}
+                scheduledFor={scheduledFor}
+                onScheduledForChange={setScheduledFor}
+                fieldError={fieldErrors?.scheduledFor?.[0]}
+                disabled={isPending}
+                publishLabel="Post"
+              />
+            ) : null}
           </div>
 
           <DialogFooter>
@@ -163,7 +181,15 @@ export function MaterialFormDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving…" : mode === "create" ? "Add" : "Save"}
+              {isPending
+                ? "Saving…"
+                : mode === "edit"
+                  ? "Save"
+                  : publishMode === "DRAFT"
+                    ? "Save draft"
+                    : publishMode === "SCHEDULED"
+                      ? "Schedule"
+                      : "Add"}
             </Button>
           </DialogFooter>
         </form>

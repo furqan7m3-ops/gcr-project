@@ -5,6 +5,12 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/permissions";
 import { AssignmentStatus } from "@/generated/prisma/enums";
 
+const STATUS_MAP = {
+  DRAFT: AssignmentStatus.DRAFT,
+  SCHEDULED: AssignmentStatus.SCHEDULED,
+  PUBLISHED: AssignmentStatus.PUBLISHED,
+} as const;
+
 import * as assignmentService from "../services/assignment-service";
 import type { ActionResult, AssignmentSummary } from "../types";
 import {
@@ -40,8 +46,9 @@ export async function createAssignmentAction(
         points: parsed.data.points,
         topicId: parsed.data.topicId,
       },
-      parsed.data.status === "PUBLISHED" ? AssignmentStatus.PUBLISHED : AssignmentStatus.DRAFT,
+      STATUS_MAP[parsed.data.status],
       extractFileMetas(formData),
+      parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null,
     );
     revalidatePath(`/classes/${parsed.data.classroomId}/classwork`);
 
@@ -82,26 +89,9 @@ export async function updateAssignmentAction(
   }
 }
 
-export async function publishAssignmentAction(
-  classroomId: string,
-  assignmentId: string,
-): Promise<ActionResult<undefined>> {
-  try {
-    const user = await requireUser();
-
-    const parsed = assignmentIdSchema.safeParse({ assignmentId });
-    if (!parsed.success) {
-      return { status: "error", message: "Invalid assignment." };
-    }
-
-    await assignmentService.publishAssignment(parsed.data.assignmentId, user);
-    revalidatePath(`/classes/${classroomId}/classwork`);
-
-    return { status: "success", data: undefined };
-  } catch (error) {
-    return toErrorResult(error, "Couldn't publish the assignment. Please try again.");
-  }
-}
+// Publishing a draft/scheduled assignment immediately now goes through the
+// shared scheduling feature's publishNow action - see
+// src/features/scheduling/actions/scheduling-mutations.ts.
 
 export async function closeAssignmentAction(
   classroomId: string,

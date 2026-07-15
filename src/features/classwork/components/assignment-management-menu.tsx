@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Pencil, Send, Trash2 } from "lucide-react";
+import { CalendarClock, CalendarX, Lock, Pencil, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,13 +14,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScheduleDialog } from "@/features/scheduling/components/schedule-dialog";
+import { useContentScheduling } from "@/features/scheduling/hooks/use-content-scheduling";
+import { toDatetimeLocalValue } from "@/features/scheduling/lib/schedule-format";
 import { usePendingAction } from "@/hooks/use-pending-action";
 
-import {
-  closeAssignmentAction,
-  deleteAssignmentAction,
-  publishAssignmentAction,
-} from "../actions/assignment-mutations";
+import { closeAssignmentAction, deleteAssignmentAction } from "../actions/assignment-mutations";
 import type { AssignmentSummary, TopicSummary } from "../types";
 import { AssignmentFormDialog } from "./assignment-form-dialog";
 
@@ -38,14 +37,7 @@ export function AssignmentManagementMenu({
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const publish = usePendingAction(
-    () => publishAssignmentAction(classroomId, assignment.id),
-    () => {
-      toast.success("Assignment published");
-      router.refresh();
-    },
-  );
+  const scheduling = useContentScheduling("assignment", assignment.id);
 
   const close = usePendingAction(
     () => closeAssignmentAction(classroomId, assignment.id),
@@ -68,21 +60,39 @@ export function AssignmentManagementMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" disabled={publish.isPending || close.isPending}>
+          <Button variant="outline" size="sm" disabled={close.isPending || scheduling.isPending}>
             {assignment.status === "DRAFT"
               ? "Draft"
-              : assignment.status === "CLOSED"
-                ? "Closed"
-                : "Manage"}
+              : assignment.status === "SCHEDULED"
+                ? "Scheduled"
+                : assignment.status === "CLOSED"
+                  ? "Closed"
+                  : "Manage"}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => setEditOpen(true)}>
             <Pencil /> Edit
           </DropdownMenuItem>
+          {assignment.status === "DRAFT" || assignment.status === "SCHEDULED" ? (
+            <DropdownMenuItem
+              onSelect={scheduling.publishImmediately}
+              disabled={scheduling.isPending}
+            >
+              <Send /> Publish now
+            </DropdownMenuItem>
+          ) : null}
           {assignment.status === "DRAFT" ? (
-            <DropdownMenuItem onSelect={publish.run} disabled={publish.isPending}>
-              <Send /> Publish
+            <DropdownMenuItem
+              onSelect={scheduling.openScheduleDialog}
+              disabled={scheduling.isPending}
+            >
+              <CalendarClock /> Schedule…
+            </DropdownMenuItem>
+          ) : null}
+          {assignment.status === "SCHEDULED" ? (
+            <DropdownMenuItem onSelect={scheduling.cancelSchedule} disabled={scheduling.isPending}>
+              <CalendarX /> Cancel scheduled publication
             </DropdownMenuItem>
           ) : null}
           {assignment.status === "PUBLISHED" ? (
@@ -107,6 +117,14 @@ export function AssignmentManagementMenu({
         topics={topics}
         open={editOpen}
         onOpenChange={setEditOpen}
+      />
+
+      <ScheduleDialog
+        open={scheduling.scheduleDialogOpen}
+        onOpenChange={scheduling.closeScheduleDialog}
+        defaultValue={toDatetimeLocalValue(assignment.scheduledFor)}
+        pending={scheduling.isPending}
+        onConfirm={scheduling.confirmSchedule}
       />
 
       <ConfirmDialog

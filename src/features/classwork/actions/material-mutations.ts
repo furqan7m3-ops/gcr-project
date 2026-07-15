@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/lib/auth/permissions";
+import { MaterialStatus } from "@/generated/prisma/enums";
 
 import * as materialService from "../services/material-service";
 import type { ActionResult, MaterialSummary } from "../types";
@@ -12,6 +13,12 @@ import {
   updateMaterialSchema,
 } from "../validation/material-schema";
 import { extractFileMetas, formDataToObject, toErrorResult } from "./shared";
+
+const STATUS_MAP = {
+  DRAFT: MaterialStatus.DRAFT,
+  SCHEDULED: MaterialStatus.SCHEDULED,
+  PUBLISHED: MaterialStatus.PUBLISHED,
+} as const;
 
 export async function createMaterialAction(
   _prevState: ActionResult<MaterialSummary> | null,
@@ -39,6 +46,8 @@ export async function createMaterialAction(
         topicId: parsed.data.topicId,
       },
       extractFileMetas(formData),
+      STATUS_MAP[parsed.data.status],
+      parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null,
     );
     revalidatePath(`/classes/${parsed.data.classroomId}/classwork`);
 

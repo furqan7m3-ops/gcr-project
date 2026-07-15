@@ -19,6 +19,8 @@ export interface MaterialSummary {
   description: string | null;
   url: string | null;
   type: MaterialType;
+  status: "DRAFT" | "SCHEDULED" | "PUBLISHED";
+  scheduledFor: Date | null;
   topicId: string | null;
   authorName: string;
   createdAt: Date;
@@ -32,6 +34,7 @@ export interface AssignmentSummary {
   title: string;
   description: string | null;
   status: AssignmentStatus;
+  scheduledFor: Date | null;
   dueDate: Date | null;
   points: number | null;
   topicId: string | null;

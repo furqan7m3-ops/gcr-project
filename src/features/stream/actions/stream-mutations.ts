@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { ClassroomServiceError } from "@/features/classroom/lib/errors";
 import { AuthError, requireUser } from "@/lib/auth/permissions";
+import { AnnouncementStatus } from "@/generated/prisma/enums";
 
 import * as streamService from "../services/stream-service";
 import type { ActionResult, AnnouncementSummary } from "../types";
@@ -12,6 +13,12 @@ import {
   createAnnouncementSchema,
   updateAnnouncementSchema,
 } from "../validation/announcement-schema";
+
+const STATUS_MAP = {
+  DRAFT: AnnouncementStatus.DRAFT,
+  SCHEDULED: AnnouncementStatus.SCHEDULED,
+  PUBLISHED: AnnouncementStatus.PUBLISHED,
+} as const;
 
 function formDataToObject(formData: FormData): Record<string, string> {
   return Object.fromEntries(formData.entries()) as Record<string, string>;
@@ -46,6 +53,8 @@ export async function createAnnouncementAction(
       parsed.data.classroomId,
       user,
       parsed.data.content,
+      STATUS_MAP[parsed.data.status],
+      parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null,
     );
     revalidatePath(`/classes/${parsed.data.classroomId}/stream`);
 
