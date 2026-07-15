@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), a centralized Teacher Review Queue (see [Teacher Review Queue](#teacher-review-queue) below), a fully read-only Archived Classroom Experience (see [Archived Classroom Experience](#archived-classroom-experience) below), role-specific Dashboard Enhancements tying all of the above together (see [Dashboard Enhancements](#dashboard-enhancements) below), a reusable, authorization-aware Global Search feature spanning both the backend service (see [Global Search Infrastructure](#global-search-infrastructure) below) and a full search UI - dialog, results page, recent searches, keyboard shortcut (see [Global Search Experience](#global-search-experience) below) - and a real-data Notifications center. On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below. Calendar is the remaining missing piece.
+GCR is a Google Classroom-inspired classroom management platform. The repository contains a working foundation plus complete vertical slices of product functionality for both the teacher/student-facing app and a full administrator platform: Docker-based PostgreSQL, a Prisma schema and migrations, Auth.js credential authentication (with login-attempt tracking, account lockout, and revocable sessions), the shared authenticated application shell, a complete Classroom module (create/join/leave/archive, roster/invitations, role-based authorization), a complete Stream module (announcements with edit/delete/pin, comments with optimistic UI), a complete Classwork module (topics, materials, assignments with a draft/scheduled/published/closed lifecycle, a per-assignment detail page, and student submissions/grading), a shared Content Scheduling engine spanning announcements/assignments/materials (see [Content Scheduling](#content-scheduling) below), a centralized Teacher Review Queue (see [Teacher Review Queue](#teacher-review-queue) below), a fully read-only Archived Classroom Experience (see [Archived Classroom Experience](#archived-classroom-experience) below), role-specific Dashboard Enhancements tying all of the above together (see [Dashboard Enhancements](#dashboard-enhancements) below), a reusable, authorization-aware Global Search feature spanning both the backend service (see [Global Search Infrastructure](#global-search-infrastructure) below) and a full search UI - dialog, results page, recent searches, keyboard shortcut (see [Global Search Experience](#global-search-experience) below) - a real-data Notifications center, and a full Calendar (`/calendar`) that aggregates due dates and scheduled content from across the other modules into Month/Week/Day views with classroom/event-type filtering (see [Calendar](#calendar) below). On top of that, `/admin` is a full administrator console: user management, classroom administration, content moderation, platform analytics and detailed reports, an audit log, system-wide settings, and a security dashboard (sessions, lockouts, password policy) — see [Admin Platform](#admin-platform) below.
 
 ## Architecture
 
@@ -476,6 +476,80 @@ Sign in as any seed account (teacher, student, or admin) - see [Get a working lo
 - As a non-admin (teacher or student), confirm no **Users** group ever appears in your search results, no matter what you search for.
 - As the admin, search for another user's name or email - confirm a **Users** group appears and clicking a result takes you to `/admin/users?q=<their email>`.
 
+## Calendar
+
+`/calendar` aggregates events from across the other modules - due dates, scheduled content, and classroom milestones - into a single Month/Week/Day calendar, without any of those modules knowing the calendar exists. There is no calendar-specific "create event" UI; every event is derived from content you already create elsewhere (Classwork, Stream), and the calendar simply reflects it.
+
+- **What shows up**: assignment due dates (`src/features/calendar/services/providers/assignment-due-date-provider.ts`), scheduled assignments/announcements/materials (`scheduled-content-provider.ts`), and a "classroom created" milestone (`classroom-events-provider.ts`) - each a small, independent provider registered into a shared `CalendarEventProvider` registry (`calendar-providers.ts`). A future event source (recurring events, an external ICS/Google Calendar/Outlook sync) plugs in the same way, with no changes to the calendar's service, queries, or any view component - the `CalendarEvent` shape already carries optional `recurrenceRule`/`seriesId` fields reserved for that.
+- **Views & navigation**: Month (a 6-week grid), Week (7-day columns, stacking to a vertical list below `lg`), and Day (a single agenda list) - all URL-driven (`?view=`, `?date=`), with **Prev / Next / Today** controls and a view switcher that never lose the current filters when you click through.
+- **Filters**: a classroom dropdown and event-type toggle chips (Assignment due / Assignment scheduled / Announcement scheduled / Material scheduled / Classroom), both URL-driven (`?classroomId=`, `?types=`) and preserved across every navigation link on the page.
+- **Sidebar**: **Today** (just today's events), **Upcoming** (the next 14 days, up to 8 shown), and a **Monthly agenda** (every event in the browsed month, grouped by day) - independent of which grid view is active.
+- **Event details dialog**: clicking any event (chip or row) opens a dialog with its type, full date/time, classroom, and description, plus a **View** button that navigates to the underlying resource (the assignment page, the classroom's Stream, or its Classwork tab) - reusing those existing routes, not a new detail view.
+- **Authorization**: the exact same classroom-scoping rule Search uses (`getClassroomSearchScope`) - a student only ever sees events for classrooms they've joined, and only once content is actually Published (never a draft or a teacher's still-Scheduled item); a teacher additionally sees Scheduled assignments/announcements/materials for classrooms they manage (matching the rule from [Content Scheduling](#content-scheduling) that Draft/Scheduled content is manager-only); an admin sees every classroom's events platform-wide. This is enforced in every provider's own query, not filtered after the fact - even a hand-edited `?classroomId=` for a classroom you don't belong to returns zero events rather than leaking anything.
+- **Query optimization**: the page needs events for four different ranges at once (the active view, today, the upcoming window, and the browsed month) plus the filter dropdown's classroom list - `getCalendarPageData()` computes the session and classroom scope exactly once and shares both across all five underlying queries, and a classroom filter is pushed down into each provider's query instead of fetched broadly and discarded afterward.
+- **Accessibility**: every event chip/row is a real, keyboard-focusable button with a visible focus ring; the month grid carries `role="grid"`/`columnheader`/`gridcell`; today's date carries `aria-current="date"`; and a month-view chip (which distinguishes event types by color alone, for space reasons) has an accessible name spelling out the type, title, and time for screen readers rather than relying on color.
+
+### Calendar manual testing walkthrough
+
+Sign in as the teacher (`daniel.teacher@gcr.dev`) unless a step says otherwise - see [Get a working login](#get-a-working-login) if that account still needs its password patched. Since the calendar has no UI of its own to create events, most of this walkthrough is "schedule something in Classwork/Stream, then confirm it shows up correctly on `/calendar`."
+
+**1. Access and default view**
+
+- Signed out, visit `/calendar` directly - redirected to `/login`, same as every other `(app)` route.
+- Signed in as any role, click **Calendar** in the sidebar - confirm it lands on `/calendar` with no query params, defaulted to **Month** view and the current month, with an empty grid (no events yet) and empty **Today**/**Upcoming**/agenda sidebar sections showing their respective "nothing yet" messages.
+
+**2. Get an assignment due date onto the calendar (Teacher)**
+
+- In any classroom's **Classwork** tab, create and publish an assignment with a due date a few days out (see [Content Scheduling](#content-scheduling) if you want to also try the Schedule-for-later flow first).
+- Back on `/calendar`, confirm an **Assignment due** chip appears on the correct day in Month view (color-coded amber) - click it to open the event details dialog, confirm the title/time/classroom are correct, then click **View** and confirm it takes you straight to that assignment's detail page.
+- Switch to **Week** view (the view switcher, top right of the toolbar) and then **Day** view (click the due date's day number, or use the switcher) - confirm the same event appears in both, now as a fuller row showing its type label and classroom name as text, not just color.
+
+**3. Get scheduled content onto the calendar (Teacher)**
+
+- Schedule an announcement, an assignment, and a material for a few minutes or hours out (see [Content Scheduling](#content-scheduling) for the **Schedule for later** flow on each).
+- Confirm all three appear on `/calendar` as **Assignment scheduled** / **Announcement scheduled** / **Material scheduled** events (three distinct colors) on the day/time you picked, and that each one's **View** button in the details dialog goes to the right place (assignment page, Stream, Classwork respectively).
+- Confirm they also appear in the **Today** sidebar section if scheduled for today, or the **Upcoming** section (with their date shown, not just a time, since Upcoming can span many days) if scheduled within the next two weeks, and in the **Monthly agenda** section grouped under the correct day either way.
+
+**4. Authorization - Student never sees what they shouldn't**
+
+- Sign in as the student (`sofia.student@gcr.dev`) and visit `/calendar`.
+- Confirm the **Assignment due** event from step 2 is visible (it's published).
+- Confirm **none** of the three scheduled events from step 3 appear anywhere on the student's calendar - not in the grid, not in Today/Upcoming, not in the Monthly agenda - since Scheduled content is manager-only, the same rule as everywhere else in the app.
+- Back as the teacher, **Publish now** one of the scheduled items (its management menu, from Stream/Classwork) - refresh the student's `/calendar` and confirm it now appears (as a due-date/published event, no longer as a "scheduled" one).
+
+**5. Authorization - Admin sees everything, platform-wide**
+
+- Sign in as the admin (`faizan.admin@gcr.dev`) and visit `/calendar` - confirm events from every classroom on the platform appear (not just ones the admin personally teaches), including any still-Scheduled items, matching the platform-wide bypass used everywhere else in the app.
+
+**6. Filters**
+
+- As the teacher, open the classroom filter dropdown - confirm it only lists classrooms you actually belong to (manage or are a member of), select one, and confirm the grid/sidebar narrow to just that classroom's events.
+- Toggle off every event-type chip except **Assignment due** - confirm only due-date events remain visible everywhere on the page (grid, Today, Upcoming, agenda); toggle a second type back on and confirm it reappears.
+- With a classroom and a type filter both active, click **Next**/**Previous**/**Today** or switch views - confirm the filters stay applied (check the URL: `classroomId=` and `types=` should persist alongside `view=`/`date=`).
+- Manually edit the URL to a `classroomId` you don't belong to (any random UUID) - confirm the page loads normally with zero events, not an error or someone else's data.
+
+**7. Navigation**
+
+- Click **Next** and **Previous** a few times in Month view - confirm the month advances/retreats by exactly one month each click (test crossing a year boundary, e.g. December → January).
+- Switch to Week view and click **Next**/**Previous** - confirm it moves by exactly 7 days. Switch to Day view and confirm it moves by exactly 1 day.
+- Click **Today** from any other month/week/day - confirm it jumps straight back to the current date without losing your active view mode or filters.
+- In Month view, click a day number (not an event) - confirm it drills into Day view for that specific date.
+
+**8. A busy day (overflow handling)**
+
+- Schedule or due-date several (5+) items onto the same single day.
+- In Month view, confirm that day's cell shows only the first few chips plus a **"+N more"** link rather than growing the cell indefinitely; click it and confirm it opens Day view for that date showing everything.
+- In Week view, confirm the same day's column caps similarly with its own **"+N more"** link, rather than stretching that entire week's row height to fit every event.
+
+**9. Responsive check**
+
+- Narrow the browser to a phone-sized viewport. Confirm the sidebar (Today/Upcoming/agenda) stacks below the calendar grid rather than beside it, the filter bar's controls wrap onto multiple lines instead of overflowing, and the Week view's 7 day-columns become a single vertical list.
+- Confirm the event details dialog remains fully usable and doesn't overflow the viewport at this width.
+
+**10. Clean up**
+
+- Delete or unpublish the test assignment/announcement/material created in steps 2-3 if you'd rather not leave them in the seed classroom.
+
 ## Admin Platform
 
 Everything under `/admin` is gated to `UserRole.ADMIN` at two layers - `src/proxy.ts` (redirects non-admins to `/dashboard?denied=admin` before the page even renders) and `src/app/admin/layout.tsx` (a server-side re-check). Sign in as `faizan.admin@gcr.dev` and use the **Admin** section of the sidebar, or visit the routes below directly.
@@ -590,7 +664,7 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 
 - `src/app`: Next.js App Router routes.
   - `(auth)/login` is public.
-  - `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`, `archived` - the "Archived classes" listing, `notifications`, `settings` - profile + password, `change-password`, `review` - the Teacher Review Queue, additionally gated to Teacher/Admin, `search` - the global search results page).
+  - `(app)` is the session-gated group wrapping every authenticated route in the shared shell (`dashboard`, `classes`, `classes/[classroomId]/{stream,classwork,people}`, `archived` - the "Archived classes" listing, `notifications`, `settings` - profile + password, `change-password`, `review` - the Teacher Review Queue, additionally gated to Teacher/Admin, `search` - the global search results page, `calendar` - the Month/Week/Day calendar).
   - `admin` is the `UserRole.ADMIN`-gated console (`users`, `classrooms`, `moderation`, `reports` + six report sub-routes, `audit-logs`, `settings`, `security` + three sub-routes), wrapped in its own shell by `admin/layout.tsx`.
   - `api/auth/[...nextauth]` is the Auth.js route handler.
 - `src/components/ui`: shadcn-style design-system primitives (button, card, table, dialog, alert-dialog, dropdown-menu, sheet, tooltip, input, textarea, select, label, skeleton, badge, avatar, separator) - no domain logic.
@@ -599,7 +673,7 @@ The application uses a Prisma-backed PostgreSQL schema that models classrooms, m
 - `src/components/page`: page-composition scaffolding - page container, section header, dashboard/stat grids, the shared paginated-table `Pagination` control.
 - `src/components/states`: shared empty/error/loading-skeleton components.
 - `src/components/layouts`: the pre-auth marketing shell used by the public landing page.
-- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Teacher/student-facing: `classroom`, `stream`, `classwork` (topics, materials, assignments, assignment detail), `submissions` (turn-in + grading), `scheduling` (the cross-content-type Draft/Scheduled/Published engine's feature-layer wiring), `review` (the cross-classroom Teacher Review Queue), `dashboard` (the role-specific `/dashboard` and `/admin` views, composed from the other features' existing services), `search` (the shared, authorization-aware global search service plus its UI - dialog, context/keyboard-shortcut provider, results page components), `notifications`, `account` (self-service change-password). Admin-facing, under `features/admin/*`: `users`, `classrooms`, `moderation`, `reports` (dashboard analytics + six detailed report generators), `audit-logs`, `settings`, `security`.
+- `src/features/<name>`: feature-owned code, each split into `services/` (Prisma access + business rules), `validation/` (Zod schemas), `actions/` (Server Actions), `queries/` (plain server-only read functions, not client-invokable Server Actions), `components/`, `hooks/`, `lib/`, `types/`. Teacher/student-facing: `classroom`, `stream`, `classwork` (topics, materials, assignments, assignment detail), `submissions` (turn-in + grading), `scheduling` (the cross-content-type Draft/Scheduled/Published engine's feature-layer wiring), `review` (the cross-classroom Teacher Review Queue), `dashboard` (the role-specific `/dashboard` and `/admin` views, composed from the other features' existing services), `search` (the shared, authorization-aware global search service plus its UI - dialog, context/keyboard-shortcut provider, results page components), `calendar` (a pluggable, authorization-aware event-aggregation service - `services/providers/` holds one file per event source, registered into a shared `CalendarEventProvider` registry - plus its Month/Week/Day UI, filters, and event details dialog), `notifications`, `account` (self-service change-password). Admin-facing, under `features/admin/*`: `users`, `classrooms`, `moderation`, `reports` (dashboard analytics + six detailed report generators), `audit-logs`, `settings`, `security`.
 - `src/auth`: Auth.js configuration (`index.ts` - credentials provider, login-attempt tracking, auto-lockout, per-session JWT tracking) and the server-side session helper (`session.ts`).
 - `src/lib`: shared utilities - `lib/auth/permissions.ts` (role/ownership authorization helpers), `lib/auth/password.ts` / `lib/password-policy.ts` (hashing + policy enforcement), `lib/audit-log.ts` (the single source of truth for which admin events are tracked, shared by every feature that writes or reads the audit trail), `lib/system-settings.ts` (cached read of the platform settings singleton), `lib/scheduling` (the content-type-agnostic Draft/Scheduled/Published engine, shared by announcements/assignments/materials), `lib/prisma.ts` (Prisma client singleton).
 - `src/proxy.ts`: the renamed Next.js middleware convention - auth gate, admin-route gate, review-route gate, forced-password-change redirect, and per-request session-revocation check.
@@ -652,6 +726,7 @@ Recommended branches:
 - **Archived Classroom Experience** (see [Archived Classroom Experience](#archived-classroom-experience) for the full walkthrough): archiving a classroom makes it genuinely read-only - every content-mutating Server Action across classroom/stream/classwork/submissions/invitations is independently blocked server-side via one shared `assertClassroomActive` guard, with matching UI (archived badge/banner, Restore action, disabled compose/invite/management controls) so the interface never dangles a control the server would reject.
 - **Dashboard Enhancements** (see [Dashboard Enhancements](#dashboard-enhancements) for the full walkthrough): `/dashboard` now renders a genuinely role-specific view for Teachers (Review queue summary, Scheduled content, Upcoming publications) and Students (Upcoming deadlines, Archived classes), and `/admin` is a real, fully wired dashboard (previously a static placeholder) with platform-wide Archived classroom and Scheduled content statistics plus a Platform activity feed - built by composing existing, already-tested components and queries rather than duplicating them.
 - **Global Search** (see [Global Search Infrastructure](#global-search-infrastructure) and [Global Search Experience](#global-search-experience) for the full walkthroughs): a shared, authorization-aware search service across classrooms/announcements/assignments/materials/topics (plus users, Admin-only), plus the full user-facing UI - a Ctrl/Cmd+K command-palette dialog with recent searches and highlighted matches, and a dedicated `/search` results page with type filter chips.
+- **Calendar** (`/calendar` - see [Calendar](#calendar) for the full walkthrough): Month/Week/Day views with Prev/Next/Today navigation, aggregating assignment due dates, scheduled assignments/announcements/materials, and classroom-created events from across the other modules via a pluggable provider architecture - classroom and event-type filters, a Today/Upcoming/Monthly-agenda sidebar, and a click-through event details dialog, all authorization-scoped the same way Search is (students see only their joined classrooms' published content; teachers additionally see their managed classrooms' scheduled/draft-adjacent content; admins see everything platform-wide).
 - **People module**: classroom roster split into Teachers/Students, an Invite dialog (email or shareable code), role changes (promote/demote co-teacher, transfer ownership), and remove-member - all authorized server-side.
 - **Notifications**: real, database-backed notifications (new assignment/material/announcement, submission returned, private comment) with an unread-count badge and a notification center, generated as a side effect of the actions above.
 - **Admin platform** (`/admin`, `UserRole.ADMIN`-only - see [Admin Platform](#admin-platform) for the full walkthrough): dashboard analytics, user management (create/edit/status/reset password/force password change), classroom administration (archive/restore/delete/transfer ownership/assign teacher), content moderation (archive/delete/restore announcements/comments/materials/assignments), six detailed filterable reports, a full audit log of every administrative action, platform-wide settings (branding, password policy, defaults), and a security dashboard (active sessions, failed logins, account lockouts).
@@ -662,7 +737,6 @@ Recommended branches:
 
 Still planned / not yet built:
 
-- Calendar (due dates across classes)
 - Real file storage for uploads (materials/assignments/submissions currently record file metadata only; Supabase Storage is the planned backend)
 - CSV/PDF export for admin reports (the report data layer already returns an export-ready `{ columns, rows }` shape; no exporter is wired up yet, by design)
 - An automatic scheduler (cron job/worker) to call `publishScheduledContent` on an interval (the function itself, and the admin-triggerable Server Action wrapping it, already exist - see [Content Scheduling](#content-scheduling))
