@@ -11,7 +11,8 @@ export interface ClassroomSummary {
   room: string | null;
   description: string | null;
   code: string;
-  coverImageUrl: string | null;
+  /** Never the raw storage key - the client always fetches the actual image via /api/classroom-covers/{id}, same "never expose file paths" convention as lesson attachments. */
+  hasCoverImage: boolean;
   status: ClassroomStatus;
   ownerId: string;
   ownerName: string;

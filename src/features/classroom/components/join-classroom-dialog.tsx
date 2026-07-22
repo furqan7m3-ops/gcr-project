@@ -24,9 +24,10 @@ const initialState: ActionResult<ClassroomSummary> | null = null;
 interface JoinClassroomDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultCode?: string;
 }
 
-export function JoinClassroomDialog({ open, onOpenChange }: JoinClassroomDialogProps) {
+export function JoinClassroomDialog({ open, onOpenChange, defaultCode }: JoinClassroomDialogProps) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(joinClassroomAction, initialState);
 
@@ -63,6 +64,7 @@ export function JoinClassroomDialog({ open, onOpenChange }: JoinClassroomDialogP
               id="code"
               name="code"
               placeholder="e.g. h3k9pqz"
+              defaultValue={defaultCode}
               required
               autoFocus
               className="mt-1.5 font-mono"

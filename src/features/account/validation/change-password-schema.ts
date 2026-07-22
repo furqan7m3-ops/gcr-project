@@ -5,6 +5,10 @@ import { z } from "zod";
 // not hardcoded here - this schema only checks shape.
 export const changePasswordSchema = z
   .object({
+    // Only required for a voluntary (non-forced) change - enforced in the
+    // action itself, since "required" here depends on the `forced` flag
+    // that travels alongside this data, not on the shape of the data.
+    currentPassword: z.string().optional(),
     newPassword: z
       .string()
       .min(1, "Password is required.")

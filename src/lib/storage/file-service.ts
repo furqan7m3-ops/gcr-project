@@ -23,7 +23,7 @@ export class FileValidationBatchError extends Error {
   }
 }
 
-function sanitizeFileName(fileName: string): string {
+export function sanitizeFileName(fileName: string): string {
   const stripped = fileName.replace(/[/\\]/g, "_").replace(/^\.+/, "");
   return stripped.slice(-180) || "file";
 }

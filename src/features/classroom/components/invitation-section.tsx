@@ -12,12 +12,14 @@ import { InvitationRow } from "./invitation-row";
 
 interface InvitationSectionProps {
   classroomId: string;
+  classroomCode: string;
   initialInvitations: PendingInvitation[];
   canInvite?: boolean;
 }
 
 export function InvitationSection({
   classroomId,
+  classroomCode,
   initialInvitations,
   canInvite = true,
 }: InvitationSectionProps) {
@@ -67,6 +69,7 @@ export function InvitationSection({
 
       <InvitationDialog
         classroomId={classroomId}
+        classroomCode={classroomCode}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onInvited={handleInvited}

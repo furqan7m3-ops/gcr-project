@@ -233,6 +233,30 @@ export async function notifyInvitationAccepted(params: {
   }
 }
 
+/** Fires once, to the specific invited user - only when the invite matched an
+ * existing registered account (inviteMember leaves inviteeUserId null for an
+ * unregistered email, since there's nobody to notify yet). There's no
+ * accept-invite page, so the link lands on /classes with the join code
+ * pre-filled - see classes-page-actions.tsx's ?code= handling. */
+export async function notifyInvited(params: {
+  inviteeUserId: string;
+  classroomId: string;
+  classroomTitle: string;
+  classroomCode: string;
+  inviterName: string;
+}): Promise<void> {
+  try {
+    await createNotificationsForRecipients([params.inviteeUserId], {
+      type: NotificationType.GENERAL,
+      title: "You're invited to join a class",
+      message: `${params.inviterName} invited you to join ${params.classroomTitle}. Use class code ${params.classroomCode} to join.`,
+      link: `/classes?code=${params.classroomCode}`,
+    });
+  } catch (error) {
+    console.error("notifyInvited failed:", error);
+  }
+}
+
 /** Fires to every manager (owner/teacher/co-teacher) of the classroom except
  * whoever is already excluded - callers exclude the joining user themselves
  * and, when the join matched a pending invitation, the specific inviter

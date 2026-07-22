@@ -24,6 +24,7 @@ export function ClassroomCard({ classroom }: { classroom: ClassroomSummary }) {
           classroomId={classroom.id}
           title={classroom.title}
           section={classroom.section}
+          hasCoverImage={classroom.hasCoverImage}
         />
         {isArchived ? (
           <Badge

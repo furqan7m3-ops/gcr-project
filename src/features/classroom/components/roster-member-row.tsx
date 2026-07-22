@@ -7,7 +7,7 @@ import { getInitials } from "@/lib/utils";
 import type { ClassroomMemberSummary, ClassroomMembershipRole } from "../types";
 
 const ROLE_LABEL: Record<ClassroomMembershipRole, string> = {
-  OWNER: "Owner",
+  OWNER: "Created By",
   TEACHER: "Teacher",
   CO_TEACHER: "Co-teacher",
   STUDENT: "Student",
@@ -31,7 +31,16 @@ export function RosterMemberRow({ member, action }: RosterMemberRowProps) {
         <AvatarFallback>{getInitials(member.name)}</AvatarFallback>
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-foreground">{member.name}</span>
+        {member.role === "OWNER" ? (
+          <a
+            href={`mailto:${member.email}`}
+            className="truncate text-sm font-medium text-foreground hover:text-primary hover:underline"
+          >
+            {member.name}
+          </a>
+        ) : (
+          <span className="truncate text-sm font-medium text-foreground">{member.name}</span>
+        )}
         <span className="truncate text-xs text-muted-foreground">{member.email}</span>
       </div>
       <Badge variant="outline">{ROLE_LABEL[member.role]}</Badge>

@@ -4,6 +4,11 @@ import {
   notifyMemberJoined,
 } from "@/features/notifications/services/notification-generator";
 import { prisma } from "@/lib/prisma";
+import {
+  deleteClassroomCoverImage,
+  uploadClassroomCoverImage,
+} from "@/lib/storage/cover-image-service";
+import { validateCoverImage } from "@/lib/storage/validation";
 import { getSystemSettings } from "@/lib/system-settings";
 import { Prisma } from "@/generated/prisma/client";
 import {
@@ -44,7 +49,7 @@ function toClassroomSummary(
     room: classroom.room,
     description: classroom.description,
     code: classroom.code,
-    coverImageUrl: classroom.coverImageUrl,
+    hasCoverImage: classroom.coverImageUrl != null,
     status: classroom.status,
     ownerId: classroom.ownerId,
     ownerName: classroom.owner.name,
@@ -182,12 +187,15 @@ export async function getClassroomRoster(
   return { teachers, students };
 }
 
+// Archived classrooms have their own dedicated list (listArchivedClassrooms,
+// reached via "Archived classes") - excluded here so archiving a class
+// actually removes it from the active list instead of just badging it there.
 export async function listUserClassrooms(userId: string): Promise<ClassroomSummary[]> {
   const memberships = await prisma.classroomMembership.findMany({
     where: {
       userId,
       status: ClassroomMembershipStatus.ACTIVE,
-      classroom: { status: { not: ClassroomStatus.DELETED } },
+      classroom: { status: ClassroomStatus.ACTIVE },
     },
     include: { classroom: { include: classroomWithOwnerInclude() } },
     orderBy: { classroom: { updatedAt: "desc" } },
@@ -367,7 +375,17 @@ export async function getClassroomForUser(
 export async function createClassroom(
   ownerId: string,
   input: CreateClassroomInput,
+  coverImage?: File,
 ): Promise<ClassroomSummary> {
+  // Validated up front, before anything is created - an invalid cover image
+  // should fail the whole create, not leave a classroom behind without one.
+  if (coverImage) {
+    const error = validateCoverImage(coverImage);
+    if (error) {
+      throw new ClassroomServiceError("VALIDATION_ERROR", error.message);
+    }
+  }
+
   const platformDefaults = await getSystemSettings();
 
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt += 1) {
@@ -411,6 +429,20 @@ export async function createClassroom(
         return created;
       });
 
+      // The storage key is namespaced by classroom id, so this can only
+      // happen once the classroom (and its real id) exists - the upload
+      // itself is an external write, so it necessarily happens outside the
+      // transaction above, same accepted tradeoff as lesson attachments.
+      if (coverImage) {
+        const key = await uploadClassroomCoverImage(coverImage, classroom.id);
+        const withCover = await prisma.classroom.update({
+          where: { id: classroom.id },
+          data: { coverImageUrl: key },
+          include: classroomWithOwnerInclude(),
+        });
+        return toClassroomSummary(withCover, ClassroomMembershipRole.OWNER);
+      }
+
       return toClassroomSummary(classroom, ClassroomMembershipRole.OWNER);
     } catch (error) {
       if (isUniqueCodeConflict(error)) {
@@ -430,6 +462,8 @@ export async function updateClassroom(
   classroomId: string,
   user: SessionUser,
   input: Omit<UpdateClassroomInput, "classroomId">,
+  coverImage?: File,
+  removeCoverImage?: boolean,
 ): Promise<ClassroomSummary> {
   const classroom = await loadActiveClassroom(classroomId);
   assertClassroomActive(
@@ -437,6 +471,22 @@ export async function updateClassroom(
     "This class is archived - restore it before editing its settings.",
   );
   await assertManagementAccess(classroomId, user);
+
+  if (coverImage) {
+    const error = validateCoverImage(coverImage);
+    if (error) {
+      throw new ClassroomServiceError("VALIDATION_ERROR", error.message);
+    }
+  }
+
+  // undefined = leave the existing cover untouched; null = clear it; a
+  // string = replace it with a freshly-uploaded key.
+  let coverImageUrl: string | null | undefined;
+  if (coverImage) {
+    coverImageUrl = await uploadClassroomCoverImage(coverImage, classroomId);
+  } else if (removeCoverImage) {
+    coverImageUrl = null;
+  }
 
   // Neither read depends on the other's result, so run them concurrently.
   const [updated, membership] = await Promise.all([
@@ -448,6 +498,7 @@ export async function updateClassroom(
         subject: input.subject ?? null,
         room: input.room ?? null,
         description: input.description ?? null,
+        ...(coverImageUrl !== undefined ? { coverImageUrl } : {}),
       },
       include: classroomWithOwnerInclude(),
     }),
@@ -455,6 +506,12 @@ export async function updateClassroom(
       where: { classroomId_userId: { classroomId, userId: user.id } },
     }),
   ]);
+
+  // Best-effort cleanup of the file the new one replaced/cleared - never
+  // blocks the update itself from returning successfully.
+  if (coverImageUrl !== undefined && classroom.coverImageUrl) {
+    await deleteClassroomCoverImage(classroom.coverImageUrl).catch(() => {});
+  }
 
   return toClassroomSummary(updated, membership?.role ?? ClassroomMembershipRole.TEACHER);
 }

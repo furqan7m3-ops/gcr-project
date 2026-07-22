@@ -33,11 +33,27 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="forced" value={forced ? "true" : "false"} />
       {forced ? (
         <p className="text-sm text-muted-foreground">
           An administrator requires you to set a new password before continuing.
         </p>
-      ) : null}
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="currentPassword">Current password</Label>
+          <Input
+            id="currentPassword"
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            required
+            autoFocus
+          />
+          {fieldErrors?.currentPassword ? (
+            <p className="text-xs text-destructive">{fieldErrors.currentPassword[0]}</p>
+          ) : null}
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="newPassword">New password</Label>
         <Input
@@ -46,7 +62,7 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
           type="password"
           autoComplete="new-password"
           required
-          autoFocus
+          autoFocus={forced}
         />
         {fieldErrors?.newPassword ? (
           <p className="text-xs text-destructive">{fieldErrors.newPassword[0]}</p>

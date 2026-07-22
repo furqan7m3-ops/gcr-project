@@ -19,6 +19,7 @@ export function ClassroomHeader({ classroom }: { classroom: ClassroomSummary }) 
           classroomId={classroom.id}
           title={classroom.title}
           section={classroom.section}
+          hasCoverImage={classroom.hasCoverImage}
           className="h-40 rounded-none sm:h-48"
         />
         {isArchived ? (

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireRole, requireUser } from "@/lib/auth/permissions";
+import { extractUploadedFiles } from "@/lib/storage/extract-files";
 import { UserRole } from "@/generated/prisma/enums";
 
 import * as classroomService from "../services/classroom-service";
@@ -31,7 +32,8 @@ export async function createClassroomAction(
       };
     }
 
-    const classroom = await classroomService.createClassroom(user.id, parsed.data);
+    const coverImage = extractUploadedFiles(formData, "coverImage")[0];
+    const classroom = await classroomService.createClassroom(user.id, parsed.data, coverImage);
     revalidatePath("/classes");
     revalidatePath("/dashboard");
 
@@ -58,7 +60,15 @@ export async function updateClassroomAction(
     }
 
     const { classroomId, ...data } = parsed.data;
-    const classroom = await classroomService.updateClassroom(classroomId, user, data);
+    const coverImage = extractUploadedFiles(formData, "coverImage")[0];
+    const removeCoverImage = formData.get("removeCoverImage") === "true";
+    const classroom = await classroomService.updateClassroom(
+      classroomId,
+      user,
+      data,
+      coverImage,
+      removeCoverImage,
+    );
     revalidatePath("/classes");
     revalidatePath(`/classes/${classroomId}`);
 

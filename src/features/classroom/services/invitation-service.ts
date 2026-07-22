@@ -1,4 +1,5 @@
 import type { SessionUser } from "@/auth/session";
+import { notifyInvited } from "@/features/notifications/services/notification-generator";
 import { prisma } from "@/lib/prisma";
 import {
   ClassroomMembershipStatus,
@@ -32,9 +33,10 @@ function toPendingInvitation(invitation: {
   };
 }
 
-async function assertClassroomAcceptsInvitations(classroomId: string): Promise<void> {
+async function assertClassroomAcceptsInvitations(classroomId: string) {
   const classroom = await loadActiveClassroom(classroomId);
   assertClassroomActive(classroom, "This class is archived and can't accept new invitations.");
+  return classroom;
 }
 
 export async function listPendingInvitations(
@@ -57,7 +59,7 @@ export async function inviteMember(
   user: SessionUser,
   email: string,
 ): Promise<PendingInvitation> {
-  await assertClassroomAcceptsInvitations(classroomId);
+  const classroom = await assertClassroomAcceptsInvitations(classroomId);
   await assertManagementAccess(classroomId, user);
 
   // Independent reads - whether this email already belongs to a user and
@@ -100,6 +102,19 @@ export async function inviteMember(
     },
     include: invitationWithInviterInclude(),
   });
+
+  // Only when the invite matched a real account - an unregistered email has
+  // nobody to notify yet, so the inviter falls back to sharing the class
+  // code/link themselves (see InvitationDialog).
+  if (existingUser) {
+    await notifyInvited({
+      inviteeUserId: existingUser.id,
+      classroomId,
+      classroomTitle: classroom.title,
+      classroomCode: classroom.code,
+      inviterName: user.name ?? "Someone",
+    });
+  }
 
   return toPendingInvitation(created);
 }

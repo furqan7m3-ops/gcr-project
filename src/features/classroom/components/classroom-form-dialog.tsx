@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ export function ClassroomFormDialog({
   const action = mode === "create" ? createClassroomAction : updateClassroomAction;
   const [state, formAction, isPending] = useActionState(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
+  const [removeCover, setRemoveCover] = useState(false);
 
   useEffect(() => {
     if (!state) {
@@ -51,6 +52,7 @@ export function ClassroomFormDialog({
       );
       onOpenChange(false);
       formRef.current?.reset();
+      startTransition(() => setRemoveCover(false));
       onSaved?.(state.data);
     } else if (!state.fieldErrors) {
       toast.error(state.message);
@@ -143,13 +145,37 @@ export function ClassroomFormDialog({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>Cover image</Label>
-              <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
-                <span>Custom cover images aren&apos;t supported yet</span>
-                <Button type="button" variant="outline" size="sm" disabled>
-                  Upload
-                </Button>
-              </div>
+              <Label htmlFor="coverImage">Cover image</Label>
+              {mode === "edit" && classroom?.hasCoverImage && !removeCover ? (
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- authorized, non-static app route, not a candidate for next/image optimization */}
+                  <img
+                    src={`/api/classroom-covers/${classroom.id}`}
+                    alt="Current cover"
+                    className="h-16 w-28 rounded-md border border-border object-cover"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRemoveCover(true)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : null}
+              <input
+                id="coverImage"
+                name="coverImage"
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+              />
+              <input type="hidden" name="removeCoverImage" value={removeCover ? "true" : "false"} />
+              <p className="text-xs text-muted-foreground">
+                JPEG, PNG, GIF, or WebP - up to 5MB. Optional - a colored banner is used if you skip
+                this.
+              </p>
             </div>
           </div>
 

@@ -45,6 +45,7 @@ export default async function PeoplePage({ params }: { params: Promise<{ classro
       {canManage ? (
         <InvitationSection
           classroomId={classroomId}
+          classroomCode={classroom.code}
           initialInvitations={invitations ?? []}
           canInvite={canInvite}
         />

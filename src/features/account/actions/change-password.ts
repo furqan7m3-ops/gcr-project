@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { AuthError, requireUser } from "@/lib/auth/permissions";
-import { hashPassword } from "@/lib/auth/password";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { getPasswordPolicyViolations } from "@/lib/password-policy";
 import { prisma } from "@/lib/prisma";
 import { getSystemSettings } from "@/lib/system-settings";
@@ -26,6 +26,37 @@ export async function changePasswordAction(
         message: "Please fix the highlighted fields.",
         fieldErrors: parsed.error.flatten().fieldErrors,
       };
+    }
+
+    // The admin-forced reset (mustChangePassword) skips this - the admin
+    // already authenticated that reset out-of-band. Every voluntary,
+    // self-service change from Settings must prove the user still knows
+    // their current password first.
+    const forced = formData.get("forced") === "true";
+    if (!forced) {
+      const currentPassword = parsed.data.currentPassword ?? "";
+      if (!currentPassword) {
+        return {
+          status: "error",
+          message: "Please fix the highlighted fields.",
+          fieldErrors: { currentPassword: ["Current password is required."] },
+        };
+      }
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { passwordHash: true },
+      });
+      const isCurrentPasswordValid =
+        dbUser?.passwordHash != null &&
+        (await verifyPassword(currentPassword, dbUser.passwordHash));
+      if (!isCurrentPasswordValid) {
+        return {
+          status: "error",
+          message: "Please fix the highlighted fields.",
+          fieldErrors: { currentPassword: ["Current password is incorrect."] },
+        };
+      }
     }
 
     const settings = await getSystemSettings();
