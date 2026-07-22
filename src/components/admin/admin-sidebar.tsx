@@ -1,12 +1,18 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
-
+import { NavList } from "@/components/shell/nav-list";
+import { getVisibleSections } from "@/components/shell/nav-config";
 import { useSidebar } from "@/components/shell/sidebar-context";
 import { cn } from "@/lib/utils";
+import { UserRole } from "@/generated/prisma/enums";
 
-import { adminNavItems } from "./admin-nav-config";
-import { AdminNavList } from "./admin-nav-list";
+// Every /admin/* route is already gated to ADMIN-only by admin/layout.tsx,
+// so this can call getVisibleSections with a fixed role rather than needing
+// the current user passed in - same nav config and same NavList component
+// the shared Shell uses elsewhere, so the sidebar's contents (and available
+// destinations) never change depending on which shell happens to be
+// mounted, only the surrounding header/chrome does.
+const sections = getVisibleSections(UserRole.ADMIN);
 
 export function AdminSidebar() {
   const { isCollapsed } = useSidebar();
@@ -19,13 +25,7 @@ export function AdminSidebar() {
       )}
     >
       <div className="flex h-full flex-col gap-2 overflow-y-auto px-3 py-4">
-        {!isCollapsed ? (
-          <div className="flex items-center gap-2 px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-            Administration
-          </div>
-        ) : null}
-        <AdminNavList items={adminNavItems} collapsed={isCollapsed} />
+        <NavList sections={sections} collapsed={isCollapsed} />
       </div>
     </aside>
   );

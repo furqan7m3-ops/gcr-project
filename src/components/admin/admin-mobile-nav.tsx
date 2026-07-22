@@ -2,11 +2,13 @@
 
 import { ShieldCheck } from "lucide-react";
 
+import { getVisibleSections } from "@/components/shell/nav-config";
+import { NavList } from "@/components/shell/nav-list";
 import { useSidebar } from "@/components/shell/sidebar-context";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { UserRole } from "@/generated/prisma/enums";
 
-import { adminNavItems } from "./admin-nav-config";
-import { AdminNavList } from "./admin-nav-list";
+const sections = getVisibleSections(UserRole.ADMIN);
 
 export function AdminMobileNav() {
   const { isMobileOpen, setMobileOpen } = useSidebar();
@@ -21,7 +23,7 @@ export function AdminMobileNav() {
           </SheetTitle>
         </SheetHeader>
         <div className="-mx-1 flex-1 overflow-y-auto">
-          <AdminNavList items={adminNavItems} onNavigate={() => setMobileOpen(false)} />
+          <NavList sections={sections} onNavigate={() => setMobileOpen(false)} />
         </div>
       </SheetContent>
     </Sheet>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Menu, ShieldCheck } from "lucide-react";
+import { Menu, ShieldCheck } from "lucide-react";
 
 import { useSidebar } from "@/components/shell/sidebar-context";
 import { UserMenu, type ShellUser } from "@/components/shell/user-menu";
@@ -43,18 +43,6 @@ export function AdminHeader({
         Administrator
       </Badge>
       <div className="flex flex-1 items-center justify-end gap-3">
-        <Link
-          href="/dashboard"
-          className="hidden items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground sm:flex"
-        >
-          <LogOut className="h-4 w-4" aria-hidden />
-          Exit to app
-        </Link>
-        <Button variant="ghost" size="icon" aria-label="Exit to app" className="sm:hidden" asChild>
-          <Link href="/dashboard">
-            <LogOut className="h-5 w-5" />
-          </Link>
-        </Button>
         <UserMenu user={user} />
       </div>
     </header>

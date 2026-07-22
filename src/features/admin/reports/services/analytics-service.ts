@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { statusLabels as classroomStatusLabels } from "@/features/admin/classrooms/lib/classroom-display";
 import { statusLabels as userStatusLabels } from "@/features/admin/users/lib/user-display";
 import { prisma } from "@/lib/prisma";
@@ -155,7 +157,21 @@ export async function getPlatformGrowth(weeks = GROWTH_WEEKS): Promise<GrowthPoi
   return points;
 }
 
-export async function getReportsData(): Promise<ReportsData> {
+/**
+ * Memoized per-request with React's cache() - getPlatformGrowth reads
+ * `new Date()` to bucket "the last 12 weeks," and this Server Action can end
+ * up invoked more than once while producing a single page render (e.g. the
+ * framework's dev-mode double-render-for-purity-checks). Without this, two
+ * invocations landing on either side of a day/week boundary would each
+ * capture a different "now" and return different weekStart values - the
+ * server-rendered HTML and the payload used to hydrate it would then
+ * disagree on what date to print, a real hydration mismatch, not a
+ * formatting bug (see platform-growth-chart.tsx's UTC-pinned formatter,
+ * which fixes a *different* now-fixed source of the same symptom).
+ * cache() guarantees every call within one request returns the exact same
+ * result.
+ */
+export const getReportsData = cache(async (): Promise<ReportsData> => {
   // Independent aggregate queries - fetched concurrently since none depends on
   // another's result.
   const [stats, overview, recentActivity, growth] = await Promise.all([
@@ -166,4 +182,4 @@ export async function getReportsData(): Promise<ReportsData> {
   ]);
 
   return { stats, overview, recentActivity, growth };
-}
+});

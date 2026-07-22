@@ -8,11 +8,13 @@ import {
   ClipboardCheck,
   ClipboardList,
   Home,
+  LayoutDashboard,
   LockKeyhole,
   ScrollText,
   Settings,
   ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
   Users,
 } from "lucide-react";
 
@@ -56,6 +58,16 @@ export const navSections: NavSection[] = [
   {
     label: "Admin",
     items: [
+      // Distinct from "Home" above (/dashboard, the same teacher-style
+      // overview admins get when browsing outside /admin) - this is the
+      // platform-stats dashboard, previously only reachable via the now-
+      // retired separate admin-only sidebar.
+      {
+        label: "Admin Dashboard",
+        href: "/admin",
+        icon: LayoutDashboard,
+        roles: [UserRole.ADMIN],
+      },
       { label: "Users", href: "/admin/users", icon: Users, roles: [UserRole.ADMIN] },
       {
         label: "Classrooms",
@@ -80,6 +92,15 @@ export const navSections: NavSection[] = [
         label: "Security",
         href: "/admin/security",
         icon: LockKeyhole,
+        roles: [UserRole.ADMIN],
+      },
+      // Distinct from the personal "Settings" item below (/settings, account
+      // details/password) - this is platform-wide configuration, previously
+      // only reachable via the now-retired separate admin-only sidebar.
+      {
+        label: "Platform Settings",
+        href: "/admin/settings",
+        icon: SlidersHorizontal,
         roles: [UserRole.ADMIN],
       },
     ],

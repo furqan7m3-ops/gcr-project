@@ -11,18 +11,34 @@ interface SidebarContextValue {
 
 const SidebarContext = React.createContext<SidebarContextValue | null>(null);
 
-export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+interface SidebarProviderProps {
+  children: React.ReactNode;
+  /**
+   * Pins the desktop sidebar permanently expanded and makes toggleCollapsed
+   * a no-op - used by AdminShell so the mini/collapsed sidebar behavior is
+   * disabled throughout the admin experience, without touching the default
+   * (teacher/student) Shell, which mounts its own separate SidebarProvider
+   * instance and is unaffected by this prop.
+   */
+  forceExpanded?: boolean;
+}
+
+export function SidebarProvider({ children, forceExpanded = false }: SidebarProviderProps) {
+  const [isCollapsedState, setIsCollapsed] = React.useState(false);
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
 
   const value = React.useMemo(
     () => ({
-      isCollapsed,
-      toggleCollapsed: () => setIsCollapsed((previous) => !previous),
+      isCollapsed: forceExpanded ? false : isCollapsedState,
+      toggleCollapsed: () => {
+        if (!forceExpanded) {
+          setIsCollapsed((previous) => !previous);
+        }
+      },
       isMobileOpen,
       setMobileOpen: setIsMobileOpen,
     }),
-    [isCollapsed, isMobileOpen],
+    [forceExpanded, isCollapsedState, isMobileOpen],
   );
 
   return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;

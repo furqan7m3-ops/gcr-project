@@ -7,7 +7,16 @@ const HEIGHT = 220;
 const PADDING_X = 12;
 const PADDING_Y = 24;
 
-const weekFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+// timeZone is pinned to UTC (not the runtime's local zone) so this renders
+// identically on the server and in every client's browser regardless of
+// either side's system timezone - otherwise a weekStart near a day boundary
+// can format as a different calendar day on each side, causing a hydration
+// mismatch in the <title> text below.
+const weekFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
 
 function buildPath(values: number[], maxValue: number): string {
   if (values.length === 0) {
