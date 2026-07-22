@@ -1,6 +1,16 @@
+import Link from "next/link";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import type { StatusBreakdownItem, SystemOverview } from "../types";
+
+function ViewDetailsLink({ href }: { href: string }) {
+  return (
+    <Link href={href} className="text-xs font-medium text-primary hover:underline">
+      View details
+    </Link>
+  );
+}
 
 function Meter({ items }: { items: StatusBreakdownItem[] }) {
   const total = items.reduce((sum, item) => sum + item.count, 0) || 1;
@@ -29,24 +39,27 @@ export function SystemOverviewPanel({ overview }: { overview: SystemOverview }) 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Users by status</CardTitle>
+          <ViewDetailsLink href="/admin/users" />
         </CardHeader>
         <CardContent>
           <Meter items={overview.userStatusBreakdown} />
         </CardContent>
       </Card>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Classrooms by status</CardTitle>
+          <ViewDetailsLink href="/admin/classrooms" />
         </CardHeader>
         <CardContent>
           <Meter items={overview.classroomStatusBreakdown} />
         </CardContent>
       </Card>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Submissions by status</CardTitle>
+          <ViewDetailsLink href="/admin/reports/submission-rates" />
         </CardHeader>
         <CardContent>
           <Meter items={overview.submissionStatusBreakdown} />

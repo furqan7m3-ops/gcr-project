@@ -1,5 +1,6 @@
 import type { SessionUser } from "@/auth/session";
 import { canManageClassroom } from "@/features/classroom/lib/can-manage";
+import { notifyClassroomArchived } from "@/features/notifications/services/notification-generator";
 import { recordAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
@@ -191,6 +192,12 @@ export async function archiveClassroom(
     targetLabel: updated.title,
     classroomId,
     metadata: { code: updated.code },
+  });
+
+  await notifyClassroomArchived({
+    classroomId,
+    classroomTitle: updated.title,
+    archivedByName: actor.name ?? "Someone",
   });
 
   return toSummary(updated);

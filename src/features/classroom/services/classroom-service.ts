@@ -1,5 +1,7 @@
 import type { SessionUser } from "@/auth/session";
 import {
+  notifyClassroomArchived,
+  notifyClassroomCreated,
   notifyInvitationAccepted,
   notifyMemberJoined,
 } from "@/features/notifications/services/notification-generator";
@@ -415,6 +417,27 @@ export async function createClassroom(
           },
         });
 
+        // Every platform admin is auto-enrolled as a co-teacher on every new
+        // classroom - visible in its roster, not just a background bypass
+        // (admins already bypass management/visibility checks everywhere
+        // regardless of membership; this is specifically about them being a
+        // real, listed member). Excludes ownerId so an admin creating their
+        // own classroom doesn't collide with the OWNER row just created above.
+        const otherAdmins = await tx.user.findMany({
+          where: { role: UserRole.ADMIN, id: { not: ownerId } },
+          select: { id: true },
+        });
+        if (otherAdmins.length > 0) {
+          await tx.classroomMembership.createMany({
+            data: otherAdmins.map((admin) => ({
+              classroomId: created.id,
+              userId: admin.id,
+              role: ClassroomMembershipRole.CO_TEACHER,
+              status: ClassroomMembershipStatus.ACTIVE,
+            })),
+          });
+        }
+
         // Every classroom gets a settings row seeded from the platform's
         // configured defaults, editable per-classroom afterward.
         await tx.classroomSettings.create({
@@ -433,17 +456,23 @@ export async function createClassroom(
       // happen once the classroom (and its real id) exists - the upload
       // itself is an external write, so it necessarily happens outside the
       // transaction above, same accepted tradeoff as lesson attachments.
+      let finalClassroom = classroom;
       if (coverImage) {
         const key = await uploadClassroomCoverImage(coverImage, classroom.id);
-        const withCover = await prisma.classroom.update({
+        finalClassroom = await prisma.classroom.update({
           where: { id: classroom.id },
           data: { coverImageUrl: key },
           include: classroomWithOwnerInclude(),
         });
-        return toClassroomSummary(withCover, ClassroomMembershipRole.OWNER);
       }
 
-      return toClassroomSummary(classroom, ClassroomMembershipRole.OWNER);
+      await notifyClassroomCreated({
+        classroomId: finalClassroom.id,
+        classroomTitle: finalClassroom.title,
+        creatorName: finalClassroom.owner.name,
+      });
+
+      return toClassroomSummary(finalClassroom, ClassroomMembershipRole.OWNER);
     } catch (error) {
       if (isUniqueCodeConflict(error)) {
         continue;
@@ -517,12 +546,18 @@ export async function updateClassroom(
 }
 
 export async function archiveClassroom(classroomId: string, user: SessionUser): Promise<void> {
-  await loadActiveClassroom(classroomId);
+  const classroom = await loadActiveClassroom(classroomId);
   await assertManagementAccess(classroomId, user);
 
   await prisma.classroom.update({
     where: { id: classroomId },
     data: { status: ClassroomStatus.ARCHIVED },
+  });
+
+  await notifyClassroomArchived({
+    classroomId,
+    classroomTitle: classroom.title,
+    archivedByName: user.name ?? "Someone",
   });
 }
 

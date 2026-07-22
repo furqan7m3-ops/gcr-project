@@ -1,10 +1,12 @@
 import {
+  Archive,
   Bell,
   ClipboardCheck,
   FileText,
   type LucideIcon,
   Megaphone,
   MessageSquare,
+  School,
   Undo2,
 } from "lucide-react";
 
@@ -38,6 +40,8 @@ export const NOTIFICATION_TYPE_ICON: Record<NotificationType, LucideIcon> = {
   SUBMISSION_RETURNED: Undo2,
   PRIVATE_COMMENT: MessageSquare,
   GENERAL: Bell,
+  CLASS_CREATED: School,
+  CLASS_ARCHIVED: Archive,
 };
 
 export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
@@ -47,4 +51,6 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   SUBMISSION_RETURNED: "Returned work",
   PRIVATE_COMMENT: "Comments",
   GENERAL: "General",
+  CLASS_CREATED: "Class created",
+  CLASS_ARCHIVED: "Class archived",
 };

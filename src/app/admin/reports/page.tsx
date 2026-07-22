@@ -34,13 +34,43 @@ export default async function AdminReportsPage() {
       />
 
       <StatGrid>
-        <StatCard label="Total users" value={stats.totalUsers} icon={Users} />
-        <StatCard label="Teachers" value={stats.teacherCount} icon={GraduationCap} />
-        <StatCard label="Students" value={stats.studentCount} icon={UserRound} />
-        <StatCard label="Admins" value={stats.adminCount} icon={ShieldCheck} />
-        <StatCard label="Classrooms" value={stats.classroomCount} icon={School} />
-        <StatCard label="Assignments" value={stats.assignmentCount} icon={ClipboardList} />
-        <StatCard label="Submissions" value={stats.submissionCount} icon={FileCheck} />
+        <StatCard label="Total users" value={stats.totalUsers} icon={Users} href="/admin/users" />
+        <StatCard
+          label="Teachers"
+          value={stats.teacherCount}
+          icon={GraduationCap}
+          href="/admin/reports/teacher-activity"
+        />
+        <StatCard
+          label="Students"
+          value={stats.studentCount}
+          icon={UserRound}
+          href="/admin/reports/student-activity"
+        />
+        <StatCard
+          label="Admins"
+          value={stats.adminCount}
+          icon={ShieldCheck}
+          href="/admin/users?role=ADMIN"
+        />
+        <StatCard
+          label="Classrooms"
+          value={stats.classroomCount}
+          icon={School}
+          href="/admin/reports/classroom-activity"
+        />
+        <StatCard
+          label="Assignments"
+          value={stats.assignmentCount}
+          icon={ClipboardList}
+          href="/admin/reports/assignment-completion"
+        />
+        <StatCard
+          label="Submissions"
+          value={stats.submissionCount}
+          icon={FileCheck}
+          href="/admin/reports/submission-rates"
+        />
         <StatCard label="Announcements" value={stats.announcementCount} icon={Megaphone} />
         <StatCard label="Notifications" value={stats.notificationCount} icon={Bell} />
       </StatGrid>

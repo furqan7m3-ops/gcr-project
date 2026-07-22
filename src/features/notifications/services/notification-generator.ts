@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { NotificationType } from "@/generated/prisma/enums";
-import { ClassroomMembershipRole, ClassroomMembershipStatus } from "@/generated/prisma/enums";
+import {
+  ClassroomMembershipRole,
+  ClassroomMembershipStatus,
+  UserRole,
+} from "@/generated/prisma/enums";
 
 /**
  * Centralized write-side of the notifications feature - every notification
@@ -18,8 +22,22 @@ interface NotificationPayload {
   link: string;
 }
 
-/** Validates every recipient actually exists before writing - a stale or
- * bogus id in the input list is silently dropped rather than inserted. */
+const ADMIN_ONLY_NOTIFICATION_TYPES: NotificationType[] = [
+  NotificationType.CLASS_CREATED,
+  NotificationType.CLASS_ARCHIVED,
+];
+
+/**
+ * Validates every recipient actually exists before writing - a stale or
+ * bogus id in the input list is silently dropped rather than inserted.
+ *
+ * Also the single authoritative place admins are excluded from every
+ * notification type except CLASS_CREATED/CLASS_ARCHIVED - individual
+ * generator functions below don't need their own admin-awareness (and can't
+ * accidentally forget it), since every write funnels through here regardless
+ * of how its recipient list was built (membership query, a single hardcoded
+ * id, whatever).
+ */
 async function createNotificationsForRecipients(
   recipientIds: string[],
   payload: NotificationPayload,
@@ -29,8 +47,13 @@ async function createNotificationsForRecipients(
     return;
   }
 
+  const isAdminOnlyType = ADMIN_ONLY_NOTIFICATION_TYPES.includes(payload.type);
+
   const validUsers = await prisma.user.findMany({
-    where: { id: { in: uniqueIds } },
+    where: {
+      id: { in: uniqueIds },
+      ...(isAdminOnlyType ? {} : { role: { not: UserRole.ADMIN } }),
+    },
     select: { id: true },
   });
 
@@ -49,6 +72,15 @@ async function createNotificationsForRecipients(
   });
 }
 
+/**
+ * Admins are auto-enrolled as a co-teacher on every classroom (see
+ * classroom-service.ts's createClassroom), which would otherwise make them
+ * "just another manager" here and pull them into every announcement/
+ * assignment/material/private-comment/member-joined notification for every
+ * classroom on the platform. Admins only ever get CLASS_CREATED/
+ * CLASS_ARCHIVED (see notifyClassroomCreated/notifyClassroomArchived below) -
+ * excluded here, once, rather than patched into every caller below.
+ */
 async function getActiveMemberIds(
   classroomId: string,
   options?: { excludeUserIds?: string[]; managersOnly?: boolean },
@@ -57,6 +89,7 @@ async function getActiveMemberIds(
     where: {
       classroomId,
       status: ClassroomMembershipStatus.ACTIVE,
+      user: { role: { not: UserRole.ADMIN } },
       ...(options?.managersOnly
         ? {
             role: {
@@ -74,6 +107,15 @@ async function getActiveMemberIds(
 
   const exclude = new Set(options?.excludeUserIds ?? []);
   return memberships.map((m) => m.userId).filter((id) => !exclude.has(id));
+}
+
+/** All current platform admins - the recipient set for CLASS_CREATED/CLASS_ARCHIVED. */
+async function getAdminIds(): Promise<string[]> {
+  const admins = await prisma.user.findMany({
+    where: { role: UserRole.ADMIN },
+    select: { id: true },
+  });
+  return admins.map((admin) => admin.id);
 }
 
 function truncate(text: string, maxLength: number): string {
@@ -281,5 +323,50 @@ export async function notifyMemberJoined(params: {
     });
   } catch (error) {
     console.error("notifyMemberJoined failed:", error);
+  }
+}
+
+/**
+ * The only two events admins are ever notified about (see
+ * createNotificationsForRecipients's ADMIN_ONLY_NOTIFICATION_TYPES guard,
+ * which is what actually enforces that - not this recipient list, which is
+ * "every admin" regardless of type). Fires to every platform admin,
+ * including whichever admin performed the action themselves - consistent
+ * with how every other classroom-event notification doesn't special-case
+ * "except when I did it myself" for a platform-wide audience.
+ */
+export async function notifyClassroomCreated(params: {
+  classroomId: string;
+  classroomTitle: string;
+  creatorName: string;
+}): Promise<void> {
+  try {
+    const recipientIds = await getAdminIds();
+    await createNotificationsForRecipients(recipientIds, {
+      type: NotificationType.CLASS_CREATED,
+      title: "Class created",
+      message: `${params.creatorName} created ${params.classroomTitle}.`,
+      link: `/classes/${params.classroomId}`,
+    });
+  } catch (error) {
+    console.error("notifyClassroomCreated failed:", error);
+  }
+}
+
+export async function notifyClassroomArchived(params: {
+  classroomId: string;
+  classroomTitle: string;
+  archivedByName: string;
+}): Promise<void> {
+  try {
+    const recipientIds = await getAdminIds();
+    await createNotificationsForRecipients(recipientIds, {
+      type: NotificationType.CLASS_ARCHIVED,
+      title: "Class archived",
+      message: `${params.archivedByName} archived ${params.classroomTitle}.`,
+      link: `/classes/${params.classroomId}`,
+    });
+  } catch (error) {
+    console.error("notifyClassroomArchived failed:", error);
   }
 }

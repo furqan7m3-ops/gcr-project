@@ -19,8 +19,14 @@ export interface ListModerationParams {
   contentType: ModeratedContentType;
   search?: string;
   status?: ModerationStatus;
+  classroomId?: string;
   page?: number;
   pageSize?: number;
+}
+
+export interface ModerationClassroomOption {
+  id: string;
+  title: string;
 }
 
 export interface ModerationPage {

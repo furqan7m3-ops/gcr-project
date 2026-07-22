@@ -6,7 +6,10 @@ import { SectionHeader } from "@/components/page/section-header";
 import { EmptyState } from "@/components/states/empty-state";
 import { ModerationStatus } from "@/generated/prisma/enums";
 
-import { getModeratedContentPageAction } from "@/features/admin/moderation/actions/moderation-queries";
+import {
+  getModerationClassroomOptionsAction,
+  getModeratedContentPageAction,
+} from "@/features/admin/moderation/actions/moderation-queries";
 import { ModerationTable } from "@/features/admin/moderation/components/moderation-table";
 import { ModerationToolbar } from "@/features/admin/moderation/components/moderation-toolbar";
 import type { ModeratedContentType } from "@/features/admin/moderation/types";
@@ -41,8 +44,12 @@ export default async function AdminModerationPage({ searchParams }: PageProps) {
     statusParam && statusParam in ModerationStatus ? (statusParam as ModerationStatus) : undefined;
   const pageParam = getStringParam(resolved, "page");
   const page = pageParam ? Math.max(1, Number(pageParam) || 1) : 1;
+  const classroomId = getStringParam(resolved, "classroomId");
 
-  const moderationPage = await getModeratedContentPageAction({ contentType, search, status, page });
+  const [moderationPage, classroomOptions] = await Promise.all([
+    getModeratedContentPageAction({ contentType, search, status, classroomId, page }),
+    getModerationClassroomOptionsAction(),
+  ]);
 
   return (
     <PageContainer>
@@ -53,7 +60,7 @@ export default async function AdminModerationPage({ searchParams }: PageProps) {
         breadcrumbsHomeHref="/admin"
       />
 
-      <ModerationToolbar contentType={contentType} />
+      <ModerationToolbar contentType={contentType} classroomOptions={classroomOptions} />
 
       {moderationPage.items.length === 0 ? (
         <EmptyState

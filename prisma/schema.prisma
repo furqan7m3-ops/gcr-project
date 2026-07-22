@@ -106,6 +106,8 @@ enum NotificationType {
   SUBMISSION_RETURNED
   PRIVATE_COMMENT
   GENERAL
+  CLASS_CREATED
+  CLASS_ARCHIVED
 }
 
 enum FileAttachmentType {

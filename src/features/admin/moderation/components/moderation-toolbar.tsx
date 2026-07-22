@@ -9,9 +9,14 @@ import { Select } from "@/components/ui/select";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 import { allModerationStatuses, contentTypeOptions, statusLabels } from "../lib/moderation-display";
-import type { ModeratedContentType } from "../types";
+import type { ModerationClassroomOption, ModeratedContentType } from "../types";
 
-export function ModerationToolbar({ contentType }: { contentType: ModeratedContentType }) {
+interface ModerationToolbarProps {
+  contentType: ModeratedContentType;
+  classroomOptions: ModerationClassroomOption[];
+}
+
+export function ModerationToolbar({ contentType, classroomOptions }: ModerationToolbarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -75,6 +80,19 @@ export function ModerationToolbar({ contentType }: { contentType: ModeratedConte
         {allModerationStatuses.map((status) => (
           <option key={status} value={status}>
             {statusLabels[status]}
+          </option>
+        ))}
+      </Select>
+      <Select
+        aria-label="Filter by class"
+        value={searchParams.get("classroomId") ?? ""}
+        onChange={(event) => updateParams({ classroomId: event.target.value || null })}
+        className="sm:w-48"
+      >
+        <option value="">All classes</option>
+        {classroomOptions.map((classroom) => (
+          <option key={classroom.id} value={classroom.id}>
+            {classroom.title}
           </option>
         ))}
       </Select>

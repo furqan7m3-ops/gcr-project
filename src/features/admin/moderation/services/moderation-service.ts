@@ -1,11 +1,12 @@
 import type { SessionUser } from "@/auth/session";
 import { recordAuditEvent, type AuditEntityType } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
-import { ActivityAction, ModerationStatus } from "@/generated/prisma/enums";
+import { ActivityAction, ClassroomStatus, ModerationStatus } from "@/generated/prisma/enums";
 
 import { AdminModerationServiceError } from "../lib/errors";
 import type {
   ListModerationParams,
+  ModerationClassroomOption,
   ModerationItem,
   ModerationPage,
   ModeratedContentType,
@@ -29,6 +30,7 @@ async function listAnnouncements(params: ListModerationParams): Promise<Moderati
   const where = {
     ...(params.status ? { moderationStatus: params.status } : {}),
     ...(params.search ? { title: { contains: params.search, mode: "insensitive" as const } } : {}),
+    ...(params.classroomId ? { classroomId: params.classroomId } : {}),
   };
 
   const [rows, total] = await Promise.all([
@@ -66,6 +68,7 @@ async function listMaterials(params: ListModerationParams): Promise<ModerationPa
   const where = {
     ...(params.status ? { moderationStatus: params.status } : {}),
     ...(params.search ? { title: { contains: params.search, mode: "insensitive" as const } } : {}),
+    ...(params.classroomId ? { classroomId: params.classroomId } : {}),
   };
 
   const [rows, total] = await Promise.all([
@@ -103,6 +106,7 @@ async function listAssignments(params: ListModerationParams): Promise<Moderation
   const where = {
     ...(params.status ? { moderationStatus: params.status } : {}),
     ...(params.search ? { title: { contains: params.search, mode: "insensitive" as const } } : {}),
+    ...(params.classroomId ? { classroomId: params.classroomId } : {}),
   };
 
   const [rows, total] = await Promise.all([
@@ -142,6 +146,17 @@ async function listComments(params: ListModerationParams): Promise<ModerationPag
     ...(params.search
       ? { content: { contains: params.search, mode: "insensitive" as const } }
       : {}),
+    // A comment's classroom is indirect - via its parent announcement or via
+    // its parent submission's assignment (a comment is on exactly one of the
+    // two) - so filtering by classroom means matching either path.
+    ...(params.classroomId
+      ? {
+          OR: [
+            { announcement: { classroomId: params.classroomId } },
+            { submission: { assignment: { classroomId: params.classroomId } } },
+          ],
+        }
+      : {}),
   };
 
   const [rows, total] = await Promise.all([
@@ -174,6 +189,16 @@ async function listComments(params: ListModerationParams): Promise<ModerationPag
   }));
 
   return { items, ...paginate(total, page, pageSize) };
+}
+
+/** Populates the "Class" filter dropdown - every non-deleted classroom, so archived ones (whose content still needs moderating) stay filterable too. */
+export async function listClassroomOptions(): Promise<ModerationClassroomOption[]> {
+  const classrooms = await prisma.classroom.findMany({
+    where: { status: { not: ClassroomStatus.DELETED } },
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
+  return classrooms;
 }
 
 export async function listModeratedContent(params: ListModerationParams): Promise<ModerationPage> {
