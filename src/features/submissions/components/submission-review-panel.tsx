@@ -223,7 +223,6 @@ export function SubmissionReviewPanel({
 
                 <Button
                   type="button"
-                  variant="outline"
                   className="w-fit"
                   onClick={saveGrade.run}
                   disabled={!isGradeValid || saveGrade.isPending}

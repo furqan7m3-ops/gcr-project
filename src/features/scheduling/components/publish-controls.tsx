@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateTimeInput } from "@/components/ui/datetime-input";
 import { Label } from "@/components/ui/label";
 
 export type PublishMode = "DRAFT" | "PUBLISHED" | "SCHEDULED";
@@ -66,10 +66,9 @@ export function PublishControls({
       {mode === "SCHEDULED" ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="scheduledFor">Publish date &amp; time</Label>
-          <Input
+          <DateTimeInput
             id="scheduledFor"
             name="scheduledFor"
-            type="datetime-local"
             value={scheduledFor}
             onChange={(event) => onScheduledForChange(event.target.value)}
             required

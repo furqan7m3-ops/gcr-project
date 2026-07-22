@@ -252,6 +252,7 @@ export function TopicList({
           {optimisticTopics.length > 0 ? (
             canManage ? (
               <DndContext
+                id={`classwork-topics-${classroomId}`}
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}

@@ -17,6 +17,8 @@ import {
 
 interface TodoBoardProps {
   items: TodoAssignmentItem[];
+  /** Seeds which tab is active, e.g. from a dashboard "Missing assignments" link's ?tab= query param. */
+  initialTab?: TodoCategory;
 }
 
 /**
@@ -24,10 +26,11 @@ interface TodoBoardProps {
  * TodoDueGroupSection. All three tabs' data already arrives pre-categorized
  * from the server in one request (see todo-service.ts), so switching tabs
  * here is instant, local UI state - no re-fetch, no navigation - the same
- * reasoning that keeps collapse/expand local rather than URL-driven.
+ * reasoning that keeps collapse/expand local rather than URL-driven (aside
+ * from the initial tab, which a caller may seed from the URL).
  */
-export function TodoBoard({ items }: TodoBoardProps) {
-  const [activeTab, setActiveTab] = useState<TodoCategory>("assigned");
+export function TodoBoard({ items, initialTab = "assigned" }: TodoBoardProps) {
+  const [activeTab, setActiveTab] = useState<TodoCategory>(initialTab);
 
   const countsByCategory = useMemo(() => {
     const counts: Record<TodoCategory, number> = { assigned: 0, missing: 0, done: 0 };

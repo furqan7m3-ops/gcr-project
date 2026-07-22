@@ -13,8 +13,18 @@ export function TeacherDashboardView({ data }: { data: TeacherDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
       <StatGrid>
-        <StatCard label="Active classes" value={data.activeClassroomCount} icon={BookOpen} />
-        <StatCard label="Archived classes" value={data.archivedClassroomCount} icon={Archive} />
+        <StatCard
+          label="Active classes"
+          value={data.activeClassroomCount}
+          icon={BookOpen}
+          href="/classes"
+        />
+        <StatCard
+          label="Archived classes"
+          value={data.archivedClassroomCount}
+          icon={Archive}
+          href="/archived"
+        />
       </StatGrid>
 
       <section className="flex flex-col gap-3">

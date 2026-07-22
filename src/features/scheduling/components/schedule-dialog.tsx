@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { DateTimeInput } from "@/components/ui/datetime-input";
 import { Label } from "@/components/ui/label";
 
 interface ScheduleDialogProps {
@@ -46,9 +46,8 @@ export function ScheduleDialog({
 
         <div className="flex flex-col gap-1.5 py-2">
           <Label htmlFor="schedule-dialog-datetime">Publish date &amp; time</Label>
-          <Input
+          <DateTimeInput
             id="schedule-dialog-datetime"
-            type="datetime-local"
             value={value}
             onChange={(event) => setValue(event.target.value)}
           />

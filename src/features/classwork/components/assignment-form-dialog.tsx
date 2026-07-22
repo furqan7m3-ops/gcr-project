@@ -1,6 +1,14 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ChangeEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -13,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DateTimeInput } from "@/components/ui/datetime-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -54,11 +63,36 @@ export function AssignmentFormDialog({
   const action = mode === "create" ? createAssignmentAction : updateAssignmentAction;
   const [state, formAction, isPending] = useActionState(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
-  const [publishMode, setPublishMode] = useState<PublishMode>("DRAFT");
+  const [publishMode, setPublishMode] = useState<PublishMode>("PUBLISHED");
   const [scheduledFor, setScheduledFor] = useState("");
   const [attachments, setAttachments] = useState(assignment?.attachments ?? []);
   const [removingAttachmentId, setRemovingAttachmentId] = useState<string | null>(null);
   const [isRemoving, startRemoveTransition] = useTransition();
+  const [dueDateValue, setDueDateValue] = useState(toDatetimeLocalValue(assignment?.dueDate));
+  const dueTimeTouchedRef = useRef(Boolean(assignment?.dueDate));
+
+  // Defaults the time to 23:59 the first time a due date is picked (Google
+  // Classroom-style "end of day" default), without clobbering a time the
+  // user has since edited themselves - ref rather than state so it doesn't
+  // itself trigger a re-render.
+  function handleDueDateChange(event: ChangeEvent<HTMLInputElement>) {
+    const raw = event.target.value;
+    if (!raw) {
+      setDueDateValue("");
+      dueTimeTouchedRef.current = false;
+      return;
+    }
+
+    const [datePart, timePart] = raw.split("T");
+    const previousDatePart = dueDateValue.split("T")[0];
+    if (datePart !== previousDatePart && !dueTimeTouchedRef.current) {
+      setDueDateValue(`${datePart}T23:59`);
+      return;
+    }
+
+    setDueDateValue(raw);
+    dueTimeTouchedRef.current = timePart !== "23:59";
+  }
 
   useEffect(() => {
     if (!state) {
@@ -69,6 +103,13 @@ export function AssignmentFormDialog({
       toast.success(mode === "create" ? "Assignment saved" : "Assignment updated");
       onOpenChange(false);
       formRef.current?.reset();
+      if (mode === "create") {
+        dueTimeTouchedRef.current = false;
+        startTransition(() => {
+          setDueDateValue("");
+          setPublishMode("PUBLISHED");
+        });
+      }
       router.refresh();
     } else if (!state.fieldErrors) {
       toast.error(state.message);
@@ -151,11 +192,11 @@ export function AssignmentFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="assignment-dueDate">Due date</Label>
-                <Input
+                <DateTimeInput
                   id="assignment-dueDate"
                   name="dueDate"
-                  type="datetime-local"
-                  defaultValue={toDatetimeLocalValue(assignment?.dueDate)}
+                  value={dueDateValue}
+                  onChange={handleDueDateChange}
                 />
                 {fieldErrors?.dueDate ? (
                   <p className="text-xs text-destructive">{fieldErrors.dueDate[0]}</p>

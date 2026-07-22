@@ -70,7 +70,7 @@ export function AttachmentUploadField({
         multiple
         accept={UPLOAD_ACCEPT_ATTRIBUTE}
         disabled={disabled}
-        className="text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-secondary-foreground"
+        className="text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
       />
       <p className="text-xs text-muted-foreground">
         PDF, Word, PowerPoint, Excel, text, ZIP, images, and videos - up to 25MB each.
