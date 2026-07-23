@@ -157,6 +157,12 @@ model User {
   emailVerified      DateTime?
   image              String?
   avatarUrl          String?
+  // Internal storage key backing avatarUrl when it's a self-uploaded photo
+  // (avatarUrl is then set to the stable /api/avatars/{userId} route) -
+  // null for the pre-existing external avatarUrl values (e.g. seeded
+  // Unsplash URLs) or when no avatar has been uploaded, in which case
+  // avatarUrl is rendered/used exactly as stored, same as always.
+  avatarStorageKey   String?
   archivedAt         DateTime?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt

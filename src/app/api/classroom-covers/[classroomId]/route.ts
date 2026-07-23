@@ -6,7 +6,7 @@ import { getClassroomForUser } from "@/features/classroom/services/classroom-ser
 import { AuthError, requireUser } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { getStorageProvider } from "@/lib/storage";
-import { getCoverImageMimeType } from "@/lib/storage/cover-image-service";
+import { getImageMimeType } from "@/lib/storage/image-mime";
 
 export const runtime = "nodejs";
 
@@ -60,7 +60,7 @@ export async function GET(
 
   return new NextResponse(stream, {
     headers: {
-      "Content-Type": getCoverImageMimeType(classroom.coverImageUrl),
+      "Content-Type": getImageMimeType(classroom.coverImageUrl),
       "Cache-Control": "private, max-age=3600",
     },
   });

@@ -66,8 +66,8 @@ export const UPLOAD_ACCEPT_ATTRIBUTE = [
   ...Array.from(ALLOWED_EXTENSIONS, (extension) => `.${extension}`),
 ].join(",");
 
-/** 5MB - a classroom cover is a single banner image, not a document/video, so it gets a tighter cap than general attachments. */
-export const MAX_COVER_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+/** 5MB - a classroom cover or an avatar is a single image, not a document/video, so it gets a tighter cap than general attachments. */
+export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
 const IMAGE_MIME_TYPES = new Set(
   SUPPORTED_FILE_TYPES.find((type) => type.label === "Image")!.mimeTypes,
@@ -116,8 +116,13 @@ export function validateFile(file: {
   return null;
 }
 
-/** Same shape as {@link validateFile} but restricted to the image subset - a cover banner shouldn't accept a video or ZIP just because that's allowed for lesson attachments. */
-export function validateCoverImage(file: {
+/**
+ * Same shape as {@link validateFile} but restricted to the image subset - a
+ * cover banner or avatar shouldn't accept a video or ZIP just because
+ * that's allowed for lesson attachments. Shared by classroom cover images
+ * and user avatars.
+ */
+export function validateImage(file: {
   name: string;
   size: number;
   type: string;
@@ -126,8 +131,8 @@ export function validateCoverImage(file: {
     return { fileName: file.name, message: `"${file.name}" is empty and can't be uploaded.` };
   }
 
-  if (file.size > MAX_COVER_IMAGE_SIZE_BYTES) {
-    const maxMb = Math.round(MAX_COVER_IMAGE_SIZE_BYTES / (1024 * 1024));
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    const maxMb = Math.round(MAX_IMAGE_SIZE_BYTES / (1024 * 1024));
     return { fileName: file.name, message: `"${file.name}" is larger than the ${maxMb}MB limit.` };
   }
 

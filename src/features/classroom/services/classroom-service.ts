@@ -10,7 +10,7 @@ import {
   deleteClassroomCoverImage,
   uploadClassroomCoverImage,
 } from "@/lib/storage/cover-image-service";
-import { validateCoverImage } from "@/lib/storage/validation";
+import { validateImage } from "@/lib/storage/validation";
 import { getSystemSettings } from "@/lib/system-settings";
 import { Prisma } from "@/generated/prisma/client";
 import {
@@ -382,7 +382,7 @@ export async function createClassroom(
   // Validated up front, before anything is created - an invalid cover image
   // should fail the whole create, not leave a classroom behind without one.
   if (coverImage) {
-    const error = validateCoverImage(coverImage);
+    const error = validateImage(coverImage);
     if (error) {
       throw new ClassroomServiceError("VALIDATION_ERROR", error.message);
     }
@@ -502,7 +502,7 @@ export async function updateClassroom(
   await assertManagementAccess(classroomId, user);
 
   if (coverImage) {
-    const error = validateCoverImage(coverImage);
+    const error = validateImage(coverImage);
     if (error) {
       throw new ClassroomServiceError("VALIDATION_ERROR", error.message);
     }
