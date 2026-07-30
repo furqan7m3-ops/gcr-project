@@ -1,4 +1,4 @@
-# GCR
+# GCR.
 
 ## Project Overview
 
