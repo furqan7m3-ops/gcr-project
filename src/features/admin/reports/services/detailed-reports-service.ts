@@ -273,7 +273,17 @@ export async function getAssignmentCompletionReport(
   };
 
   const [assignments, studentCounts, submissionStats] = await Promise.all([
-    prisma.assignment.findMany({ where, include: { classroom: { select: { title: true } } } }),
+    prisma.assignment.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        dueDate: true,
+        classroomId: true,
+        classroom: { select: { title: true } },
+      },
+    }),
     prisma.classroomMembership.groupBy({
       by: ["classroomId"],
       where: { role: ClassroomMembershipRole.STUDENT, status: ClassroomMembershipStatus.ACTIVE },

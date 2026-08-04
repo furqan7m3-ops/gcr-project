@@ -207,6 +207,7 @@ model LoginAttempt {
 
   @@index([email, createdAt])
   @@index([userId, createdAt])
+  @@index([succeeded, createdAt])
 }
 
 // Tracks individual signed-in sessions (one per login) so a specific session
@@ -228,6 +229,7 @@ model UserLoginSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, revokedAt])
+  @@index([revokedAt, expiresAt])
 }
 
 model Account {
@@ -399,6 +401,7 @@ model Announcement {
   comments      Comment[]         @relation("AnnouncementComments")
 
   @@index([status, scheduledFor])
+  @@index([moderationStatus, createdAt])
 
   @@index([classroomId, createdAt])
   @@index([authorId])
@@ -433,6 +436,7 @@ model Material {
   @@index([topicId])
   @@index([authorId])
   @@index([status, scheduledFor])
+  @@index([moderationStatus, createdAt])
 }
 
 model Assignment {
@@ -466,6 +470,7 @@ model Assignment {
   @@index([topicId])
   @@index([authorId])
   @@index([status, scheduledFor])
+  @@index([moderationStatus, createdAt])
 }
 
 model Submission {
@@ -516,6 +521,7 @@ model Comment {
   @@index([announcementId, createdAt])
   @@index([submissionId, createdAt])
   @@index([authorId])
+  @@index([moderationStatus, createdAt])
 }
 
 model Notification {
@@ -599,6 +605,7 @@ model ActivityLog {
   @@index([actorId, createdAt])
   @@index([classroomId, createdAt])
   @@index([entityType, entityId])
+  @@index([entityType, action, createdAt])
 }
 
 // Platform-wide configuration. Always exactly one row - enforced by the

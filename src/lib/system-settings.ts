@@ -12,14 +12,19 @@ export const SYSTEM_SETTINGS_ID = "00000000-0000-0000-0000-000000000001";
  * first access. Memoized per-request via React's cache() so every feature
  * reading settings within the same render tree shares one query instead of
  * each issuing its own.
+ *
+ * Reads via findUnique rather than unconditionally upserting - the row
+ * exists after first access, so every subsequent request only needs a plain
+ * read instead of paying for an upsert's write path on every page load.
  */
 export const getSystemSettings = cache(async () => {
+  const existing = await prisma.systemSettings.findUnique({ where: { id: SYSTEM_SETTINGS_ID } });
+  if (existing) {
+    return existing;
+  }
+
   try {
-    return await prisma.systemSettings.upsert({
-      where: { id: SYSTEM_SETTINGS_ID },
-      create: { id: SYSTEM_SETTINGS_ID },
-      update: {},
-    });
+    return await prisma.systemSettings.create({ data: { id: SYSTEM_SETTINGS_ID } });
   } catch (error) {
     // Two concurrent first-reads can both miss the row and race to create it
     // (seen in practice: Next.js prerenders multiple pages in parallel
