@@ -6,10 +6,11 @@ import { SectionHeader } from "@/components/page/section-header";
 import { UserRole } from "@/generated/prisma/enums";
 
 import { TimetableBoard } from "@/features/timetable/components/timetable-board";
-import { todayDateOnly } from "@/features/timetable/lib/slots";
+import { todayDayOfWeek } from "@/features/timetable/lib/slots";
 import {
+  listActiveRooms,
   listSchedulableClassrooms,
-  listTimetableForUser,
+  listWeeklyTimetable,
 } from "@/features/timetable/services/timetable-service";
 
 export default async function TimetablePage() {
@@ -19,26 +20,32 @@ export default async function TimetablePage() {
   }
 
   const isTeacher = user.role === UserRole.TEACHER;
-  const [slots, schedulableClassrooms] = await Promise.all([
-    listTimetableForUser(user),
+  const [slots, schedulableClassrooms, rooms] = await Promise.all([
+    listWeeklyTimetable(user),
     isTeacher ? listSchedulableClassrooms(user) : Promise.resolve([]),
+    isTeacher || user.role === UserRole.ADMIN ? listActiveRooms() : Promise.resolve([]),
   ]);
 
   return (
     <PageContainer>
       <SectionHeader
-        title="Timetable"
+        title={user.role === UserRole.ADMIN ? "Timetable" : "My timetable"}
         description={
           isTeacher
-            ? "Schedule one-hour classes for your sections. Students are notified automatically."
-            : "Upcoming classes for your sections."
+            ? "Your weekly timetable - it repeats every week. Add a class once (day, time and room) and change it whenever you need; students are notified automatically."
+            : user.role === UserRole.ADMIN
+              ? "Every class on the weekly timetable."
+              : "Your weekly timetable - the same every week."
         }
       />
+
       <TimetableBoard
         slots={slots}
         schedulableClassrooms={schedulableClassrooms}
         canSchedule={isTeacher}
-        today={todayDateOnly()}
+        showTeacher={!isTeacher}
+        rooms={rooms}
+        today={todayDayOfWeek()}
       />
     </PageContainer>
   );

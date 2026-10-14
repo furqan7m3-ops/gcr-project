@@ -28,6 +28,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Roles that can see this item. Omit to show it to everyone. */
   roles?: UserRole[];
+  /** Show a red dot while the user has unread notifications. */
+  showUnreadDot?: boolean;
 }
 
 export interface NavSection {
@@ -39,7 +41,7 @@ export const navSections: NavSection[] = [
   {
     items: [
       { label: "Home", href: "/dashboard", icon: Home },
-      { label: "Notifications", href: "/notifications", icon: Bell },
+      { label: "Notifications", href: "/notifications", icon: Bell, showUnreadDot: true },
       { label: "Calendar", href: "/calendar", icon: Calendar },
       { label: "Timetable", href: "/timetable", icon: CalendarClock },
       {

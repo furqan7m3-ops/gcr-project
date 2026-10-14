@@ -51,6 +51,7 @@ export const NOTIFICATION_TYPE_ICON: Record<NotificationType, LucideIcon> = {
   TIMESLOT_CANCELLED: CalendarX,
   TIMESLOT_CLASH: TriangleAlert,
   TIMESLOT_RESOLVED: CalendarCheck,
+  TIMESLOT_CLASH_REPORTED: TriangleAlert,
 };
 
 export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
@@ -67,4 +68,5 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   TIMESLOT_CANCELLED: "Class cancelled",
   TIMESLOT_CLASH: "Timetable clash",
   TIMESLOT_RESOLVED: "Clash resolved",
+  TIMESLOT_CLASH_REPORTED: "Clash sent to admin",
 };

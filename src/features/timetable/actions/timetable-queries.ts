@@ -11,8 +11,9 @@ import { toErrorResult } from "./shared";
 /** Which hours of a date are free for a class - powers the teacher's slot picker. */
 export async function getSlotAvailabilityAction(input: {
   classroomId: string;
-  date: string;
+  dayOfWeek: number;
   excludeSlotId?: string;
+  room?: string;
 }): Promise<ActionResult<SlotHourAvailability[]>> {
   try {
     const user = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
@@ -32,7 +33,8 @@ export async function getSlotAvailabilityAction(input: {
 /** Which hours of a date are free for the blocked class in a clash - powers the admin's slot picker. */
 export async function getClashAvailabilityAction(input: {
   clashId: string;
-  date: string;
+  dayOfWeek: number;
+  room?: string;
 }): Promise<ActionResult<SlotHourAvailability[]>> {
   try {
     await requireRole([UserRole.ADMIN]);
@@ -44,7 +46,8 @@ export async function getClashAvailabilityAction(input: {
 
     const hours = await timetableService.getClashAvailability(
       parsed.data.clashId,
-      parsed.data.date,
+      parsed.data.dayOfWeek,
+      parsed.data.room,
     );
     return { status: "success", data: hours };
   } catch (error) {

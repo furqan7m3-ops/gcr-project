@@ -5,6 +5,7 @@ export type TimetableErrorCode =
   | "SECTION_NOT_SET"
   | "SLOT_TAKEN"
   | "TEACHER_BUSY"
+  | "ROOM_TAKEN"
   | "ALREADY_SCHEDULED"
   | "CLASH_NOT_PENDING";
 

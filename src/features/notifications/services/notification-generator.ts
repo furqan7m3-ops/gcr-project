@@ -385,6 +385,7 @@ export async function notifyTimeslotScheduled(params: {
   classroomTitle: string;
   teacherId: string;
   slotLabel: string;
+  room: string;
   scheduledByAdmin?: boolean;
 }): Promise<void> {
   try {
@@ -394,10 +395,10 @@ export async function notifyTimeslotScheduled(params: {
     });
     await createNotificationsForRecipients(recipientIds, {
       type: NotificationType.TIMESLOT_SCHEDULED,
-      title: `Class scheduled: ${params.classroomTitle}`,
+      title: `Added to your timetable: ${params.classroomTitle}`,
       message: params.scheduledByAdmin
-        ? `${params.classroomTitle} has been scheduled by the admin for ${params.slotLabel}.`
-        : `${params.classroomTitle} is scheduled for ${params.slotLabel}.`,
+        ? `${params.classroomTitle} has been scheduled by the admin for ${params.slotLabel} in Room ${params.room}.`
+        : `${params.classroomTitle} is scheduled for ${params.slotLabel} in Room ${params.room}.`,
       link: "/timetable",
     });
   } catch (error) {
@@ -410,7 +411,9 @@ export async function notifyTimeslotUpdated(params: {
   classroomTitle: string;
   teacherId: string;
   oldSlotLabel: string;
+  oldRoom: string;
   newSlotLabel: string;
+  newRoom: string;
 }): Promise<void> {
   try {
     const recipientIds = await getActiveMemberIds(params.classroomId, {
@@ -419,8 +422,8 @@ export async function notifyTimeslotUpdated(params: {
     });
     await createNotificationsForRecipients(recipientIds, {
       type: NotificationType.TIMESLOT_UPDATED,
-      title: `Class rescheduled: ${params.classroomTitle}`,
-      message: `${params.classroomTitle} moved from ${params.oldSlotLabel} to ${params.newSlotLabel}.`,
+      title: `Timetable changed: ${params.classroomTitle}`,
+      message: `${params.classroomTitle} moved from ${params.oldSlotLabel} (Room ${params.oldRoom}) to ${params.newSlotLabel} (Room ${params.newRoom}).`,
       link: "/timetable",
     });
   } catch (error) {
@@ -433,6 +436,7 @@ export async function notifyTimeslotCancelled(params: {
   classroomTitle: string;
   teacherId: string;
   slotLabel: string;
+  room: string;
 }): Promise<void> {
   try {
     const recipientIds = await getActiveMemberIds(params.classroomId, {
@@ -441,8 +445,8 @@ export async function notifyTimeslotCancelled(params: {
     });
     await createNotificationsForRecipients(recipientIds, {
       type: NotificationType.TIMESLOT_CANCELLED,
-      title: `Class cancelled: ${params.classroomTitle}`,
-      message: `${params.classroomTitle} on ${params.slotLabel} has been cancelled.`,
+      title: `Removed from your timetable: ${params.classroomTitle}`,
+      message: `${params.classroomTitle} (${params.slotLabel}, Room ${params.room}) has been removed from the weekly timetable.`,
       link: "/timetable",
     });
   } catch (error) {
@@ -457,17 +461,25 @@ export async function notifyTimeslotClash(params: {
   section: string;
   teacherName: string;
   slotLabel: string;
+  room: string;
+  kind: "SECTION" | "ROOM";
   conflictingClassroomTitle: string | null;
+  /** Set for a reschedule request: where the class is booked right now. */
+  movingFrom?: string;
 }): Promise<void> {
   try {
     const recipientIds = await getAdminIds();
-    const against = params.conflictingClassroomTitle
-      ? ` Section ${params.section} already has ${params.conflictingClassroomTitle} then.`
-      : ` Section ${params.section} already has a class then.`;
+    const other = params.conflictingClassroomTitle ?? "another class";
+    const against =
+      params.kind === "ROOM"
+        ? ` Room ${params.room} is already in use by ${other} then.`
+        : ` Section ${params.section} already has ${other} then.`;
     await createNotificationsForRecipients(recipientIds, {
       type: NotificationType.TIMESLOT_CLASH,
       title: "Timetable clash",
-      message: `${params.teacherName} tried to schedule ${params.classroomTitle} for ${params.slotLabel}.${against}`,
+      message: params.movingFrom
+        ? `${params.teacherName} tried to move ${params.classroomTitle} from ${params.movingFrom} to ${params.slotLabel} in Room ${params.room}.${against}`
+        : `${params.teacherName} tried to schedule ${params.classroomTitle} for ${params.slotLabel} in Room ${params.room}.${against}`,
       link: `/admin/timetable?clash=${params.clashId}`,
     });
   } catch (error) {
@@ -475,15 +487,40 @@ export async function notifyTimeslotClash(params: {
   }
 }
 
+/** To the teacher whose booking clashed: their request was handed to the admin. */
+export async function notifyTimeslotClashReported(params: {
+  teacherId: string;
+  classroomTitle: string;
+  slotLabel: string;
+  room: string;
+  reason: string;
+  /** Set for a reschedule request: where the class is booked right now. */
+  movingFrom?: string;
+}): Promise<void> {
+  try {
+    await createNotificationsForRecipients([params.teacherId], {
+      type: NotificationType.TIMESLOT_CLASH_REPORTED,
+      title: "Clash sent to admin",
+      message: params.movingFrom
+        ? `Your request to move ${params.classroomTitle} from ${params.movingFrom} to ${params.slotLabel} (Room ${params.room}) clashes: ${params.reason} It has been sent to the admin to resolve - your class stays at ${params.movingFrom} until then, and you'll be notified of the decision.`
+        : `Your request for ${params.classroomTitle} on ${params.slotLabel} (Room ${params.room}) clashes: ${params.reason} It has been sent to the admin to resolve - please wait, you'll be notified once the admin moves your class to a free slot.`,
+      link: "/timetable",
+    });
+  } catch (error) {
+    console.error("notifyTimeslotClashReported failed:", error);
+  }
+}
+
 /** To the teachers involved in a resolved clash, stating the slot the blocked class was moved to. */
 export async function notifyTimeslotResolved(params: {
   teacherIds: string[];
   message: string;
+  title?: string;
 }): Promise<void> {
   try {
     await createNotificationsForRecipients(params.teacherIds, {
       type: NotificationType.TIMESLOT_RESOLVED,
-      title: "Timetable clash resolved",
+      title: params.title ?? "Timetable clash resolved",
       message: params.message,
       link: "/timetable",
     });

@@ -124,14 +124,6 @@ export function ClassroomFormDialog({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="room">Room</Label>
-              <Input id="room" name="room" defaultValue={classroom?.room ?? ""} maxLength={50} />
-              {fieldErrors?.room ? (
-                <p className="text-xs text-destructive">{fieldErrors.room[0]}</p>
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"

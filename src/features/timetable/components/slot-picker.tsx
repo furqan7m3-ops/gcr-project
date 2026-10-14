@@ -22,10 +22,12 @@ function describe(slot: SlotHourAvailability, allowTaken: boolean): string | nul
   switch (slot.state) {
     case "section_taken":
       return allowTaken ? `Booked: ${slot.occupiedBy} (clash)` : `Booked: ${slot.occupiedBy}`;
+    case "room_taken":
+      return allowTaken
+        ? `Room in use: ${slot.occupiedBy} (clash)`
+        : `Room in use: ${slot.occupiedBy}`;
     case "teacher_busy":
       return `You teach ${slot.occupiedBy}`;
-    case "past":
-      return "Unavailable";
     default:
       return null;
   }
@@ -41,15 +43,16 @@ export function SlotPicker({
   if (loading || !availability) {
     return (
       <p className="text-sm text-muted-foreground">
-        {loading ? "Checking availability…" : "Pick a date to see the time slots."}
+        {loading ? "Checking availability…" : "Pick a day to see the time slots."}
       </p>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Time slot">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Time slot">
       {availability.map((slot) => {
-        const selectable = slot.state === "free" || (allowTaken && slot.state === "section_taken");
+        const isClash = slot.state === "section_taken" || slot.state === "room_taken";
+        const selectable = slot.state === "free" || (allowTaken && isClash);
         const note = describe(slot, allowTaken);
         const selected = value === slot.hour;
 
@@ -66,7 +69,7 @@ export function SlotPicker({
               selected
                 ? "border-primary bg-primary/10 text-foreground"
                 : "border-border bg-card text-foreground hover:bg-accent",
-              slot.state === "section_taken" && allowTaken && !selected && "border-amber-500/60",
+              isClash && allowTaken && !selected && "border-amber-500/60",
               !selectable && "cursor-not-allowed opacity-50 hover:bg-card",
             )}
           >

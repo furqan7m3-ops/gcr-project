@@ -22,48 +22,57 @@ import { Label } from "@/components/ui/label";
 
 import { dismissClashAction, resolveClashAction } from "../actions/timetable-mutations";
 import { getClashAvailabilityAction } from "../actions/timetable-queries";
-import { formatSlot, formatSlotDate } from "../lib/slots";
+import {
+  ROOM_FORMAT_MESSAGE,
+  formatShortDate,
+  formatSlot,
+  isValidRoom,
+  sanitizeRoomInput,
+} from "../lib/slots";
 import type { TimetableClashView } from "../types";
+import { DayPicker } from "./day-picker";
 import { SlotPicker } from "./slot-picker";
+import { RoomOccupancy, applyRoomToAvailability } from "./room-occupancy";
 import { useSlotAvailability } from "./use-slot-availability";
-
-function localToday(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
-function isSundayValue(value: string): boolean {
-  return new Date(`${value}T00:00:00.000Z`).getUTCDay() === 0;
-}
 
 function ResolveClashDialog({
   clash,
+  rooms,
   onOpenChange,
 }: {
   clash: TimetableClashView;
+  rooms: string[];
   onOpenChange: (open: boolean) => void;
 }) {
-  const [date, setDate] = useState(clash.date);
+  const [dayOfWeek, setDayOfWeek] = useState(clash.dayOfWeek);
+  const [room, setRoom] = useState(clash.room);
   const [hour, setHour] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const sunday = date !== "" && isSundayValue(date);
-  const availability = useSlotAvailability(date && !sunday ? `${clash.id}|${date}` : null, () =>
-    getClashAvailabilityAction({ clashId: clash.id, date }),
+  const roomIsValid = isValidRoom(room) && rooms.includes(room);
+  const availability = useSlotAvailability(`${clash.id}|${dayOfWeek}`, () =>
+    getClashAvailabilityAction({ clashId: clash.id, dayOfWeek }),
   );
+  // The typed room is checked against each hour's booked rooms locally - no refetch per keystroke.
+  const hours = applyRoomToAvailability(availability.hours, room);
+  const selectedSlot = hours?.find((slot) => slot.hour === hour);
+  const canSubmit = roomIsValid && selectedSlot?.state === "free";
 
   function submit() {
-    if (hour === null || !date) {
+    if (hour === null || !roomIsValid) {
       return;
     }
 
     startTransition(async () => {
-      const result = await resolveClashAction({ clashId: clash.id, date, startHour: hour });
+      const result = await resolveClashAction({
+        clashId: clash.id,
+        dayOfWeek,
+        startHour: hour,
+        room,
+      });
       if (result.status === "success") {
         toast.success(
-          `${clash.classroomTitle} moved to ${formatSlot(date, hour)}. Teachers and students were notified.`,
+          `${clash.classroomTitle} moved to ${formatSlot(dayOfWeek, hour)} in Room ${room.trim()}. Teachers and students were notified.`,
         );
         onOpenChange(false);
       } else {
@@ -78,35 +87,35 @@ function ResolveClashDialog({
         <DialogHeader>
           <DialogTitle>Resolve clash</DialogTitle>
           <DialogDescription>
-            {clash.requestedByName} asked for {clash.classroomTitle} on{" "}
-            {formatSlot(clash.date, clash.startHour)}, but Section {clash.section} already has{" "}
-            {clash.conflictingClassroomTitle ?? "a class"} then. Move {clash.classroomTitle} to a
-            free slot - the existing class keeps its slot.
+            {clash.requestedByName}{" "}
+            {clash.currentDayOfWeek !== null && clash.currentStartHour !== null
+              ? `wants to move ${clash.classroomTitle} from ${formatSlot(clash.currentDayOfWeek, clash.currentStartHour)} (Room ${clash.currentRoom}) to`
+              : `asked for ${clash.classroomTitle} on`}{" "}
+            {formatSlot(clash.dayOfWeek, clash.startHour)} (Room {clash.room}), but{" "}
+            {clash.kind === "ROOM"
+              ? `Room ${clash.room} is already in use by ${clash.conflictingClassroomTitle ?? "another class"}`
+              : `Section ${clash.section} already has ${clash.conflictingClassroomTitle ?? "a class"}`}{" "}
+            then. Move {clash.classroomTitle} to a free slot and/or room - the existing class keeps
+            its slot.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-2">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="clash-date">New date</Label>
-            <Input
-              id="clash-date"
-              type="date"
-              min={localToday()}
-              value={date}
-              onChange={(event) => {
-                setDate(event.target.value);
+            <Label>New day</Label>
+            <DayPicker
+              value={dayOfWeek}
+              onChange={(day) => {
+                setDayOfWeek(day);
                 setHour(null);
               }}
             />
-            {sunday ? (
-              <p className="text-xs text-destructive">Classes run Monday to Saturday.</p>
-            ) : null}
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label>New time slot</Label>
             <SlotPicker
-              availability={availability.hours}
+              availability={hours}
               loading={availability.loading}
               value={hour}
               onChange={setHour}
@@ -116,13 +125,34 @@ function ResolveClashDialog({
               <p className="text-xs text-destructive">{availability.error}</p>
             ) : null}
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="clash-room">Room no.</Label>
+            <Input
+              id="clash-room"
+              value={room}
+              inputMode="numeric"
+              maxLength={3}
+              onChange={(event) => setRoom(sanitizeRoomInput(event.target.value))}
+            />
+            <p
+              className={`text-xs ${room !== "" && !roomIsValid ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {room !== "" && !isValidRoom(room)
+                ? ROOM_FORMAT_MESSAGE
+                : room !== "" && !roomIsValid
+                  ? `Room ${room} isn't a registered room - pick one from the list below.`
+                  : "Keep the requested room or pick another free one below - a room holds one class at a time."}
+            </p>
+            <RoomOccupancy slot={selectedSlot} room={room} rooms={rooms} onSelect={setRoom} />
+          </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={isPending || hour === null || !date}>
+          <Button onClick={submit} disabled={isPending || !canSubmit}>
             {isPending ? "Moving…" : "Move class & notify"}
           </Button>
         </DialogFooter>
@@ -131,7 +161,14 @@ function ResolveClashDialog({
   );
 }
 
-export function ClashList({ clashes }: { clashes: TimetableClashView[] }) {
+export function ClashList({
+  clashes,
+  rooms,
+}: {
+  clashes: TimetableClashView[];
+  /** Registered room numbers, for the resolve dialog's room picker. */
+  rooms: string[];
+}) {
   const [resolveTarget, setResolveTarget] = useState<TimetableClashView | null>(null);
   const [dismissTarget, setDismissTarget] = useState<TimetableClashView | null>(null);
   const [isDismissing, startDismiss] = useTransition();
@@ -191,22 +228,35 @@ export function ClashList({ clashes }: { clashes: TimetableClashView[] }) {
               </Badge>
             </p>
             <p className="text-sm text-foreground">
-              {clash.requestedByName} requested {formatSlot(clash.date, clash.startHour)}
+              {clash.requestedByName}{" "}
+              {clash.currentDayOfWeek !== null ? "wants to move it to" : "requested"}{" "}
+              {formatSlot(clash.dayOfWeek, clash.startHour)} · Room {clash.room}
             </p>
+            {clash.currentDayOfWeek !== null && clash.currentStartHour !== null ? (
+              <p className="text-sm text-muted-foreground">
+                Move request - currently booked{" "}
+                {formatSlot(clash.currentDayOfWeek, clash.currentStartHour)} · Room{" "}
+                {clash.currentRoom}
+              </p>
+            ) : null}
             <p className="text-sm text-muted-foreground">
-              Already booked by {clash.conflictingClassroomTitle ?? "another class"}
+              {clash.kind === "ROOM"
+                ? `Room ${clash.room} already in use by `
+                : "Already booked by "}
+              {clash.conflictingClassroomTitle ?? "another class"}
               {clash.conflictingTeacherName ? ` (${clash.conflictingTeacherName})` : ""}
             </p>
             {clash.status === "RESOLVED" &&
-            clash.resolvedDate &&
+            clash.resolvedDayOfWeek !== null &&
             clash.resolvedStartHour !== null ? (
               <p className="text-sm text-muted-foreground">
-                Moved to {formatSlot(clash.resolvedDate, clash.resolvedStartHour)}
+                Moved to {formatSlot(clash.resolvedDayOfWeek, clash.resolvedStartHour)}
+                {clash.resolvedRoom ? ` · Room ${clash.resolvedRoom}` : ""}
                 {clash.resolvedByName ? ` by ${clash.resolvedByName}` : ""}
               </p>
             ) : null}
             <p className="text-xs text-muted-foreground">
-              Reported {formatSlotDate(clash.createdAt)}
+              Reported {formatShortDate(clash.createdAt)}
             </p>
           </div>
 
@@ -226,6 +276,7 @@ export function ClashList({ clashes }: { clashes: TimetableClashView[] }) {
       {resolveTarget ? (
         <ResolveClashDialog
           clash={resolveTarget}
+          rooms={rooms}
           onOpenChange={(open) => !open && setResolveTarget(null)}
         />
       ) : null}
@@ -233,9 +284,9 @@ export function ClashList({ clashes }: { clashes: TimetableClashView[] }) {
       <ConfirmDialog
         open={dismissTarget !== null}
         onOpenChange={(open) => !open && setDismissTarget(null)}
-        title="Dismiss this clash?"
-        description="No class will be scheduled and nobody is notified. Use this when the teacher has already picked another slot."
-        confirmLabel="Dismiss"
+        title="Dismiss this request?"
+        description="First come, first served: the class that already holds the slot keeps it. A new booking is simply not made; a move request is declined and the class stays where it is. The requesting teacher is notified either way."
+        confirmLabel="Dismiss request"
         pending={isDismissing}
         onConfirm={confirmDismiss}
       />

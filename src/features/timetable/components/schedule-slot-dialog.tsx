@@ -18,64 +18,78 @@ import { Select } from "@/components/ui/select";
 
 import { rescheduleSlotAction, scheduleSlotAction } from "../actions/timetable-mutations";
 import { getSlotAvailabilityAction } from "../actions/timetable-queries";
-import { formatSlot } from "../lib/slots";
+import { ROOM_FORMAT_MESSAGE, formatSlot, isValidRoom, sanitizeRoomInput } from "../lib/slots";
 import type { TimetableClassroomOption, TimetableSlotView } from "../types";
+import { DayPicker } from "./day-picker";
+import { RoomOccupancy, applyRoomToAvailability } from "./room-occupancy";
 import { SlotPicker } from "./slot-picker";
 import { useSlotAvailability } from "./use-slot-availability";
 
 type ScheduleSlotDialogProps = {
   onOpenChange: (open: boolean) => void;
+  /** Registered room numbers. */
+  rooms: string[];
 } & (
   | { mode: "create"; classrooms: TimetableClassroomOption[] }
   | { mode: "reschedule"; slot: TimetableSlotView }
 );
 
-function localToday(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
-function isSundayValue(value: string): boolean {
-  return new Date(`${value}T00:00:00.000Z`).getUTCDay() === 0;
-}
-
 /** Mounted only while open, so every open starts from a clean form. */
 export function ScheduleSlotDialog(props: ScheduleSlotDialogProps) {
-  const { onOpenChange } = props;
+  const { onOpenChange, rooms } = props;
   const isCreate = props.mode === "create";
 
   const [classroomId, setClassroomId] = useState(
     props.mode === "create" ? (props.classrooms[0]?.id ?? "") : props.slot.classroomId,
   );
-  const [date, setDate] = useState(props.mode === "reschedule" ? props.slot.date : "");
-  const [hour, setHour] = useState<number | null>(null);
+  const [dayOfWeek, setDayOfWeek] = useState<number | null>(
+    props.mode === "reschedule" ? props.slot.dayOfWeek : null,
+  );
+  const [room, setRoom] = useState(props.mode === "reschedule" ? props.slot.room : "");
+  // Rescheduling starts on the class's current hour, so the room list for that
+  // hour is visible straight away instead of only after picking a new slot.
+  const [hour, setHour] = useState<number | null>(
+    props.mode === "reschedule" ? props.slot.startHour : null,
+  );
   const [isPending, startTransition] = useTransition();
 
-  const today = localToday();
-  const sunday = date !== "" && isSundayValue(date);
   const excludeSlotId = props.mode === "reschedule" ? props.slot.id : undefined;
 
+  const roomIsValid = isValidRoom(room) && rooms.includes(room);
   const availabilityKey =
-    classroomId && date && !sunday ? `${classroomId}|${date}|${excludeSlotId ?? ""}` : null;
+    classroomId && dayOfWeek !== null ? `${classroomId}|${dayOfWeek}|${excludeSlotId ?? ""}` : null;
   const availability = useSlotAvailability(availabilityKey, () =>
-    getSlotAvailabilityAction({ classroomId, date, excludeSlotId }),
+    getSlotAvailabilityAction({ classroomId, dayOfWeek: dayOfWeek ?? 0, excludeSlotId }),
   );
+  // The typed room is checked against each hour's booked rooms locally - no refetch per keystroke.
+  const hours = applyRoomToAvailability(availability.hours, room);
 
-  const selectedState = availability.hours?.find((slot) => slot.hour === hour)?.state;
-  const willClash = isCreate && selectedState === "section_taken";
+  const selectedSlot = hours?.find((slot) => slot.hour === hour);
+  const selectedState = selectedSlot?.state;
+  // Both new bookings and reschedules may pick a clashing slot: it goes to the admin.
+  const willClash = selectedState === "section_taken" || selectedState === "room_taken";
+  const unchanged =
+    props.mode === "reschedule" &&
+    dayOfWeek === props.slot.dayOfWeek &&
+    hour === props.slot.startHour &&
+    room === props.slot.room;
+  const canSubmit = !unchanged && roomIsValid && (selectedState === "free" || willClash);
 
   function submit() {
-    if (hour === null || !date || !classroomId) {
+    if (hour === null || dayOfWeek === null || !classroomId || !roomIsValid) {
       return;
     }
 
     startTransition(async () => {
       const result =
         props.mode === "create"
-          ? await scheduleSlotAction({ classroomId, date, startHour: hour })
-          : await rescheduleSlotAction({ slotId: props.slot.id, date, startHour: hour });
+          ? await scheduleSlotAction({ classroomId, dayOfWeek, startHour: hour, room })
+          : await rescheduleSlotAction({
+              slotId: props.slot.id,
+              dayOfWeek,
+              startHour: hour,
+              room,
+            });
 
       if (result.status === "error") {
         toast.error(result.message);
@@ -98,8 +112,8 @@ export function ScheduleSlotDialog(props: ScheduleSlotDialogProps) {
           <DialogTitle>{isCreate ? "Schedule a class" : "Reschedule class"}</DialogTitle>
           <DialogDescription>
             {props.mode === "reschedule"
-              ? `${props.slot.classroomTitle} - currently ${formatSlot(props.slot.date, props.slot.startHour)}.`
-              : "Pick a one-hour slot between 8:00 AM and 5:00 PM, Monday to Saturday. Students in the class are notified automatically."}
+              ? `${props.slot.classroomTitle} - currently ${formatSlot(props.slot.dayOfWeek, props.slot.startHour)} in Room ${props.slot.room}.`
+              : "Add a class to your weekly timetable: pick the day and a one-hour slot (8:00 AM - 5:00 PM), then a free room. It repeats every week, and the class's students are notified automatically."}
           </DialogDescription>
         </DialogHeader>
 
@@ -125,40 +139,65 @@ export function ScheduleSlotDialog(props: ScheduleSlotDialogProps) {
           ) : null}
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="timetable-date">Date</Label>
-            <Input
-              id="timetable-date"
-              type="date"
-              min={today}
-              value={date}
-              onChange={(event) => {
-                setDate(event.target.value);
+            <Label>Day</Label>
+            <DayPicker
+              value={dayOfWeek}
+              onChange={(day) => {
+                setDayOfWeek(day);
                 setHour(null);
               }}
             />
-            {sunday ? (
-              <p className="text-xs text-destructive">Classes run Monday to Saturday.</p>
-            ) : null}
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label>Time slot</Label>
             <SlotPicker
-              availability={availability.hours}
+              availability={hours}
               loading={availability.loading}
               value={hour}
               onChange={setHour}
-              allowTaken={isCreate}
+              allowTaken
             />
             {availability.error ? (
               <p className="text-xs text-destructive">{availability.error}</p>
             ) : null}
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="timetable-room">Room no.</Label>
+            <Input
+              id="timetable-room"
+              value={room}
+              inputMode="numeric"
+              maxLength={3}
+              placeholder="e.g. 204"
+              onChange={(event) => setRoom(sanitizeRoomInput(event.target.value))}
+            />
+            <p
+              className={`text-xs ${room !== "" && !roomIsValid ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {room !== "" && !isValidRoom(room)
+                ? ROOM_FORMAT_MESSAGE
+                : room !== "" && !roomIsValid
+                  ? `Room ${room} isn't a registered room - pick one from the list below.`
+                  : "Pick a free room below, or type its 3-digit number (first digit = floor)."}
+            </p>
+            <RoomOccupancy slot={selectedSlot} room={room} rooms={rooms} onSelect={setRoom} />
+            {unchanged ? (
+              <p className="text-xs text-muted-foreground">
+                This is the class&apos;s current slot and room - pick a different day, time or room
+                to move it.
+              </p>
+            ) : null}
+          </div>
+
           {willClash ? (
             <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
-              This section already has a class in that slot, so it won&apos;t be booked. The admin
-              will be notified of the clash and will move your class to a free slot.
+              {selectedState === "room_taken"
+                ? "That room is already in use at this time."
+                : "This section already has a class in that slot."}{" "}
+              Your request will be sent to the admin to resolve - they&apos;ll move your class to a
+              free slot and you&apos;ll be notified.
             </p>
           ) : null}
         </div>
@@ -167,7 +206,10 @@ export function ScheduleSlotDialog(props: ScheduleSlotDialogProps) {
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={isPending || hour === null || !date || !classroomId}>
+          <Button
+            onClick={submit}
+            disabled={isPending || !canSubmit || dayOfWeek === null || !classroomId}
+          >
             {isPending
               ? "Saving…"
               : willClash

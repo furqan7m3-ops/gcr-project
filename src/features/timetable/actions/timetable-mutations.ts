@@ -24,8 +24,9 @@ function revalidateTimetable() {
 
 export async function scheduleSlotAction(input: {
   classroomId: string;
-  date: string;
+  dayOfWeek: number;
   startHour: number;
+  room: string;
 }): Promise<ActionResult<ScheduleOutcome>> {
   try {
     const user = await requireRole([UserRole.TEACHER]);
@@ -46,8 +47,9 @@ export async function scheduleSlotAction(input: {
 
 export async function rescheduleSlotAction(input: {
   slotId: string;
-  date: string;
+  dayOfWeek: number;
   startHour: number;
+  room: string;
 }): Promise<ActionResult<ScheduleOutcome>> {
   try {
     const user = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
@@ -86,8 +88,9 @@ export async function cancelSlotAction(slotId: string): Promise<ActionResult<und
 
 export async function resolveClashAction(input: {
   clashId: string;
-  date: string;
+  dayOfWeek: number;
   startHour: number;
+  room: string;
 }): Promise<ActionResult<undefined>> {
   try {
     const admin = await requireRole([UserRole.ADMIN]);

@@ -5,7 +5,7 @@ import { SectionHeader } from "@/components/page/section-header";
 import { Button } from "@/components/ui/button";
 
 import { ClashList } from "@/features/timetable/components/clash-list";
-import { listClashes } from "@/features/timetable/services/timetable-service";
+import { listActiveRooms, listClashes } from "@/features/timetable/services/timetable-service";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -15,7 +15,7 @@ export default async function AdminTimetablePage({ searchParams }: PageProps) {
   const resolved = await searchParams;
   const filter = resolved.status === "all" ? "all" : "pending";
 
-  const clashes = await listClashes(filter);
+  const [clashes, rooms] = await Promise.all([listClashes(filter), listActiveRooms()]);
 
   return (
     <PageContainer>
@@ -32,7 +32,7 @@ export default async function AdminTimetablePage({ searchParams }: PageProps) {
           </Button>
         }
       />
-      <ClashList clashes={clashes} />
+      <ClashList clashes={clashes} rooms={rooms} />
     </PageContainer>
   );
 }

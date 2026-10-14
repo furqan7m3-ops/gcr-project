@@ -23,7 +23,6 @@ export const createClassroomSchema = z.object({
     .min(1, "Section is required.")
     .max(50, "Section must be at most 50 characters."),
   subject: optionalTrimmed(100, "Subject"),
-  room: optionalTrimmed(50, "Room"),
   description: optionalTrimmed(2000, "Description"),
 });
 
