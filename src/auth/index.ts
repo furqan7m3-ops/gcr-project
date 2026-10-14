@@ -161,7 +161,18 @@ export const authConfig: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // Fired by useSession().update() after a password change, so the JWT
+      // stops carrying a stale mustChangePassword flag (which proxy.ts would
+      // otherwise keep redirecting on) without forcing a fresh sign-in.
+      if (trigger === "update" && typeof token.id === "string") {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { mustChangePassword: true },
+        });
+        token.mustChangePassword = dbUser?.mustChangePassword ?? false;
+      }
+
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role ?? "STUDENT";

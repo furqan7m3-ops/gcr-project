@@ -60,7 +60,13 @@ export async function changePasswordAction(
     }
 
     const settings = await getSystemSettings();
-    const violations = getPasswordPolicyViolations(parsed.data.newPassword, settings);
+    // Uppercase and symbol requirements are intentionally not enforced here;
+    // only the configured minimum length and number requirement apply.
+    const violations = getPasswordPolicyViolations(parsed.data.newPassword, {
+      ...settings,
+      requirePasswordUppercase: false,
+      requirePasswordSymbol: false,
+    });
     if (violations.length > 0) {
       return {
         status: "error",

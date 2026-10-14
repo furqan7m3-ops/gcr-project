@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
-import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { SessionProvider, useSession } from "next-auth/react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,17 @@ import { changePasswordAction } from "../actions/change-password";
 const initialState: ActionResult<undefined> | null = null;
 
 export function ChangePasswordForm({ forced }: { forced: boolean }) {
+  return (
+    <SessionProvider>
+      <ChangePasswordFormInner forced={forced} />
+    </SessionProvider>
+  );
+}
+
+function ChangePasswordFormInner({ forced }: { forced: boolean }) {
   const [state, formAction, isPending] = useActionState(changePasswordAction, initialState);
+  const router = useRouter();
+  const { update } = useSession();
 
   useEffect(() => {
     if (!state) {
@@ -22,8 +33,11 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
     }
 
     if (state.status === "success") {
-      toast.success("Password updated. Please sign in again.");
-      void signOut({ callbackUrl: "/login" });
+      toast.success("Password updated.");
+      void update().then(() => {
+        router.replace("/dashboard");
+        router.refresh();
+      });
     } else if (!state.fieldErrors) {
       toast.error(state.message);
     }

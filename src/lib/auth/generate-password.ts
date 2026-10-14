@@ -4,7 +4,7 @@ import crypto from "crypto";
 // read off-screen and typed by hand is less error-prone.
 const CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
 
-export function generateTemporaryPassword(length = 14): string {
+export function generateTemporaryPassword(length = 7): string {
   const bytes = crypto.randomBytes(length);
   let password = "";
 
