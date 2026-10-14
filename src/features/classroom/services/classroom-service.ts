@@ -5,6 +5,7 @@ import {
   notifyInvitationAccepted,
   notifyMemberJoined,
 } from "@/features/notifications/services/notification-generator";
+import { toSectionKey } from "@/features/timetable/lib/slots";
 import { prisma } from "@/lib/prisma";
 import {
   deleteClassroomCoverImage,
@@ -399,7 +400,7 @@ export async function createClassroom(
           data: {
             ownerId,
             title: input.title,
-            section: input.section ?? null,
+            section: input.section,
             subject: input.subject ?? null,
             room: input.room ?? null,
             description: input.description ?? null,
@@ -517,20 +518,47 @@ export async function updateClassroom(
     coverImageUrl = null;
   }
 
+  // Timetable slots carry the classroom's normalized section so the database
+  // itself can reject two classes in one section at the same time. When the
+  // section changes, its existing slots/clashes follow it - and if that would
+  // collide with a class already on the timetable there, the whole edit is
+  // rejected rather than silently creating a double-booking.
+  const sectionKey = toSectionKey(input.section);
+  const sectionChanged = sectionKey !== toSectionKey(classroom.section);
+
   // Neither read depends on the other's result, so run them concurrently.
   const [updated, membership] = await Promise.all([
-    prisma.classroom.update({
-      where: { id: classroomId },
-      data: {
-        title: input.title,
-        section: input.section ?? null,
-        subject: input.subject ?? null,
-        room: input.room ?? null,
-        description: input.description ?? null,
-        ...(coverImageUrl !== undefined ? { coverImageUrl } : {}),
-      },
-      include: classroomWithOwnerInclude(),
-    }),
+    prisma
+      .$transaction(async (tx) => {
+        const result = await tx.classroom.update({
+          where: { id: classroomId },
+          data: {
+            title: input.title,
+            section: input.section,
+            subject: input.subject ?? null,
+            room: input.room ?? null,
+            description: input.description ?? null,
+            ...(coverImageUrl !== undefined ? { coverImageUrl } : {}),
+          },
+          include: classroomWithOwnerInclude(),
+        });
+
+        if (sectionChanged) {
+          await tx.timetableSlot.updateMany({ where: { classroomId }, data: { sectionKey } });
+          await tx.timetableClash.updateMany({ where: { classroomId }, data: { sectionKey } });
+        }
+
+        return result;
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new ClassroomServiceError(
+            "VALIDATION_ERROR",
+            "Can't move this class to that section: it would clash with a class already on the timetable there.",
+          );
+        }
+        throw error;
+      }),
     prisma.classroomMembership.findUnique({
       where: { classroomId_userId: { classroomId, userId: user.id } },
     }),

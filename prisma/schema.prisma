@@ -108,6 +108,17 @@ enum NotificationType {
   GENERAL
   CLASS_CREATED
   CLASS_ARCHIVED
+  TIMESLOT_SCHEDULED
+  TIMESLOT_UPDATED
+  TIMESLOT_CANCELLED
+  TIMESLOT_CLASH
+  TIMESLOT_RESOLVED
+}
+
+enum TimetableClashStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
 }
 
 enum FileAttachmentType {
@@ -187,6 +198,9 @@ model User {
   publishedAnnouncements Announcement[]        @relation("AnnouncementPublishedBy")
   publishedMaterials    Material[]             @relation("MaterialPublishedBy")
   publishedAssignments  Assignment[]           @relation("AssignmentPublishedBy")
+  timetableSlots        TimetableSlot[]        @relation("TimetableSlotTeacher")
+  timetableClashRequests TimetableClash[]      @relation("TimetableClashRequester")
+  resolvedTimetableClashes TimetableClash[]    @relation("TimetableClashResolver")
 
   @@index([role])
   @@index([status])
@@ -280,7 +294,7 @@ model Classroom {
   ownerId       String           @db.Uuid
   title         String
   subject       String?
-  section       String?
+  section       String
   description   String?
   room          String?
   code          String           @unique
@@ -299,6 +313,8 @@ model Classroom {
   materials           Material[]
   assignments         Assignment[]
   activityLogs        ActivityLog[]
+  timetableSlots      TimetableSlot[]
+  timetableClashes    TimetableClash[]
 
   @@index([ownerId])
   @@index([status])
@@ -606,6 +622,62 @@ model ActivityLog {
   @@index([classroomId, createdAt])
   @@index([entityType, entityId])
   @@index([entityType, action, createdAt])
+}
+
+// A one-off, one-hour class session: a classroom (course) taught on a specific
+// calendar date starting at a specific hour (startHour 8..16, i.e. 08:00-17:00).
+// Not recurring. sectionKey is the classroom's section, trimmed and lowercased -
+// the unique constraint on (sectionKey, slotDate, startHour) is what guarantees a
+// section never has two classes at the same time, even under concurrent bookings.
+// The (teacherId, slotDate, startHour) constraint likewise stops a teacher from
+// being scheduled in two places at once.
+model TimetableSlot {
+  id          String   @id @default(uuid()) @db.Uuid
+  classroomId String   @db.Uuid
+  teacherId   String   @db.Uuid
+  sectionKey  String
+  slotDate    DateTime @db.Date
+  startHour   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  classroom       Classroom        @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  teacher         User             @relation("TimetableSlotTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
+  clashes         TimetableClash[] @relation("TimetableClashConflictingSlot")
+  resolvedClashes TimetableClash[] @relation("TimetableClashResolvedSlot")
+
+  @@unique([sectionKey, slotDate, startHour])
+  @@unique([teacherId, slotDate, startHour])
+  @@index([classroomId, slotDate])
+  @@index([slotDate])
+}
+
+// A booking attempt that was refused because the section already had a class in
+// the requested slot. Kept so an admin can review it and move the blocked class
+// to a free slot (resolvedSlot) - the existing booking is never touched.
+model TimetableClash {
+  id                String               @id @default(uuid()) @db.Uuid
+  classroomId       String               @db.Uuid
+  requestedById     String               @db.Uuid
+  conflictingSlotId String?              @db.Uuid
+  sectionKey        String
+  slotDate          DateTime             @db.Date
+  startHour         Int
+  status            TimetableClashStatus @default(PENDING)
+  resolvedById      String?              @db.Uuid
+  resolvedSlotId    String?              @db.Uuid
+  resolvedAt        DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  classroom       Classroom      @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  requestedBy     User           @relation("TimetableClashRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  resolvedBy      User?          @relation("TimetableClashResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  conflictingSlot TimetableSlot? @relation("TimetableClashConflictingSlot", fields: [conflictingSlotId], references: [id], onDelete: SetNull)
+  resolvedSlot    TimetableSlot? @relation("TimetableClashResolvedSlot", fields: [resolvedSlotId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([classroomId, status])
 }
 
 // Platform-wide configuration. Always exactly one row - enforced by the

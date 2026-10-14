@@ -6,7 +6,7 @@ export type { ClassroomMembershipRole } from "@/generated/prisma/enums";
 export interface ClassroomSummary {
   id: string;
   title: string;
-  section: string | null;
+  section: string;
   subject: string | null;
   room: string | null;
   description: string | null;

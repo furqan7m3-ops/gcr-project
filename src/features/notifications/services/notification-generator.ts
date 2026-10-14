@@ -25,6 +25,7 @@ interface NotificationPayload {
 const ADMIN_ONLY_NOTIFICATION_TYPES: NotificationType[] = [
   NotificationType.CLASS_CREATED,
   NotificationType.CLASS_ARCHIVED,
+  NotificationType.TIMESLOT_CLASH,
 ];
 
 /**
@@ -83,7 +84,7 @@ async function createNotificationsForRecipients(
  */
 async function getActiveMemberIds(
   classroomId: string,
-  options?: { excludeUserIds?: string[]; managersOnly?: boolean },
+  options?: { excludeUserIds?: string[]; managersOnly?: boolean; studentsOnly?: boolean },
 ): Promise<string[]> {
   const memberships = await prisma.classroomMembership.findMany({
     where: {
@@ -101,6 +102,7 @@ async function getActiveMemberIds(
             },
           }
         : {}),
+      ...(options?.studentsOnly ? { role: ClassroomMembershipRole.STUDENT } : {}),
     },
     select: { userId: true },
   });
@@ -368,5 +370,124 @@ export async function notifyClassroomArchived(params: {
     });
   } catch (error) {
     console.error("notifyClassroomArchived failed:", error);
+  }
+}
+
+/**
+ * Timetable events. Students of the classroom are the audience for anything
+ * about when their class meets; teachers only hear about the admin's clash
+ * resolution (they made the booking themselves); admins only hear about clashes.
+ * `slotLabel` is always a ready-formatted "Mon, Oct 14, 2026, 10:00 AM - 11:00 AM"
+ * string so every notification states the actual timeslot.
+ */
+export async function notifyTimeslotScheduled(params: {
+  classroomId: string;
+  classroomTitle: string;
+  teacherId: string;
+  slotLabel: string;
+  scheduledByAdmin?: boolean;
+}): Promise<void> {
+  try {
+    const recipientIds = await getActiveMemberIds(params.classroomId, {
+      studentsOnly: true,
+      excludeUserIds: [params.teacherId],
+    });
+    await createNotificationsForRecipients(recipientIds, {
+      type: NotificationType.TIMESLOT_SCHEDULED,
+      title: `Class scheduled: ${params.classroomTitle}`,
+      message: params.scheduledByAdmin
+        ? `${params.classroomTitle} has been scheduled by the admin for ${params.slotLabel}.`
+        : `${params.classroomTitle} is scheduled for ${params.slotLabel}.`,
+      link: "/timetable",
+    });
+  } catch (error) {
+    console.error("notifyTimeslotScheduled failed:", error);
+  }
+}
+
+export async function notifyTimeslotUpdated(params: {
+  classroomId: string;
+  classroomTitle: string;
+  teacherId: string;
+  oldSlotLabel: string;
+  newSlotLabel: string;
+}): Promise<void> {
+  try {
+    const recipientIds = await getActiveMemberIds(params.classroomId, {
+      studentsOnly: true,
+      excludeUserIds: [params.teacherId],
+    });
+    await createNotificationsForRecipients(recipientIds, {
+      type: NotificationType.TIMESLOT_UPDATED,
+      title: `Class rescheduled: ${params.classroomTitle}`,
+      message: `${params.classroomTitle} moved from ${params.oldSlotLabel} to ${params.newSlotLabel}.`,
+      link: "/timetable",
+    });
+  } catch (error) {
+    console.error("notifyTimeslotUpdated failed:", error);
+  }
+}
+
+export async function notifyTimeslotCancelled(params: {
+  classroomId: string;
+  classroomTitle: string;
+  teacherId: string;
+  slotLabel: string;
+}): Promise<void> {
+  try {
+    const recipientIds = await getActiveMemberIds(params.classroomId, {
+      studentsOnly: true,
+      excludeUserIds: [params.teacherId],
+    });
+    await createNotificationsForRecipients(recipientIds, {
+      type: NotificationType.TIMESLOT_CANCELLED,
+      title: `Class cancelled: ${params.classroomTitle}`,
+      message: `${params.classroomTitle} on ${params.slotLabel} has been cancelled.`,
+      link: "/timetable",
+    });
+  } catch (error) {
+    console.error("notifyTimeslotCancelled failed:", error);
+  }
+}
+
+/** To every admin: a teacher asked for a slot the section already has a class in. */
+export async function notifyTimeslotClash(params: {
+  clashId: string;
+  classroomTitle: string;
+  section: string;
+  teacherName: string;
+  slotLabel: string;
+  conflictingClassroomTitle: string | null;
+}): Promise<void> {
+  try {
+    const recipientIds = await getAdminIds();
+    const against = params.conflictingClassroomTitle
+      ? ` Section ${params.section} already has ${params.conflictingClassroomTitle} then.`
+      : ` Section ${params.section} already has a class then.`;
+    await createNotificationsForRecipients(recipientIds, {
+      type: NotificationType.TIMESLOT_CLASH,
+      title: "Timetable clash",
+      message: `${params.teacherName} tried to schedule ${params.classroomTitle} for ${params.slotLabel}.${against}`,
+      link: `/admin/timetable?clash=${params.clashId}`,
+    });
+  } catch (error) {
+    console.error("notifyTimeslotClash failed:", error);
+  }
+}
+
+/** To the teachers involved in a resolved clash, stating the slot the blocked class was moved to. */
+export async function notifyTimeslotResolved(params: {
+  teacherIds: string[];
+  message: string;
+}): Promise<void> {
+  try {
+    await createNotificationsForRecipients(params.teacherIds, {
+      type: NotificationType.TIMESLOT_RESOLVED,
+      title: "Timetable clash resolved",
+      message: params.message,
+      link: "/timetable",
+    });
+  } catch (error) {
+    console.error("notifyTimeslotResolved failed:", error);
   }
 }
