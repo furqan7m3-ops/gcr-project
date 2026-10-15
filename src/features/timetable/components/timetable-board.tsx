@@ -10,7 +10,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { cancelSlotAction } from "../actions/timetable-mutations";
+import { assignCourseColors, courseColorFor } from "../lib/course-colors";
 import { SLOT_START_HOURS, TIMETABLE_DAYS, formatHourRange, formatSlot } from "../lib/slots";
 import type { TimetableClassroomOption, TimetableSlotView } from "../types";
 import { ScheduleSlotDialog } from "./schedule-slot-dialog";
@@ -82,6 +83,19 @@ export function TimetableBoard({
       }
     });
   }
+
+  const courseColors = useMemo(() => assignCourseColors(slots), [slots]);
+  const colorOf = (slot: Pick<TimetableSlotView, "classroomId">) =>
+    courseColors.get(slot.classroomId) ?? courseColorFor(slot.classroomId);
+  const legend = useMemo(() => {
+    const seen = new Map<string, TimetableSlotView>();
+    for (const slot of slots) {
+      if (!seen.has(slot.classroomId)) {
+        seen.set(slot.classroomId, slot);
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.classroomTitle.localeCompare(b.classroomTitle));
+  }, [slots]);
 
   const slotAt = (day: number, hour: number) =>
     slots.find((slot) => slot.dayOfWeek === day && slot.startHour === hour);
@@ -175,6 +189,21 @@ export function TimetableBoard({
         </p>
       ) : null}
 
+      {legend.length > 1 ? (
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-2" aria-label="Courses">
+          {legend.map((course) => (
+            <li
+              key={course.classroomId}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <span className={cn("h-2.5 w-2.5 rounded-full", colorOf(course).dot)} aria-hidden />
+              {course.classroomTitle}
+              <span className="text-muted-foreground/70">· Sec {course.section}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       {/* Grid: hours down the side, Monday-Saturday across (wide screens only). */}
       <div
         className={cn(
@@ -229,14 +258,22 @@ export function TimetableBoard({
                           type="button"
                           onClick={() => setDetails(slot)}
                           className={cn(
-                            "flex h-full w-full flex-col items-start gap-0.5 rounded-md border px-2 py-1 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            slot.pendingMove
-                              ? "border-amber-500/60 bg-amber-500/10"
-                              : "border-primary/30 bg-primary/10",
+                            "flex h-full w-full flex-col items-start gap-0.5 rounded-md border border-l-4 px-2 py-1 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            colorOf(slot).surface,
+                            colorOf(slot).accent,
+                            slot.pendingMove && "border-dashed",
                           )}
                         >
-                          <span className="line-clamp-1 text-xs font-semibold text-foreground">
-                            {slot.classroomTitle}
+                          <span
+                            className={cn(
+                              "flex w-full items-center gap-1 text-xs font-semibold",
+                              colorOf(slot).title,
+                            )}
+                          >
+                            {slot.pendingMove ? (
+                              <Hourglass className="h-3 w-3 shrink-0 text-amber-600" aria-hidden />
+                            ) : null}
+                            <span className="line-clamp-1">{slot.classroomTitle}</span>
                           </span>
                           <span className="text-[11px] text-muted-foreground">
                             Room {slot.room} · Sec {slot.section}
@@ -292,7 +329,11 @@ export function TimetableBoard({
                   {daySlots.map((slot) => (
                     <li
                       key={slot.id}
-                      className="flex flex-col gap-1.5 rounded-lg border border-border bg-background p-3"
+                      className={cn(
+                        "flex flex-col gap-1.5 rounded-lg border border-l-4 p-3",
+                        colorOf(slot).surface,
+                        colorOf(slot).accent,
+                      )}
                     >
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-muted-foreground">
                         <span className="flex items-center gap-1">
@@ -304,7 +345,9 @@ export function TimetableBoard({
                           Room {slot.room}
                         </span>
                       </div>
-                      <p className="text-sm font-semibold text-foreground">{slot.classroomTitle}</p>
+                      <p className={cn("text-sm font-semibold", colorOf(slot).title)}>
+                        {slot.classroomTitle}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         Section {slot.section}
                         {slot.subject ? ` · ${slot.subject}` : ""}
@@ -326,7 +369,13 @@ export function TimetableBoard({
         <Dialog open onOpenChange={(open) => !open && setDetails(null)}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>{details.classroomTitle}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <span
+                  className={cn("h-3 w-3 shrink-0 rounded-full", colorOf(details).dot)}
+                  aria-hidden
+                />
+                {details.classroomTitle}
+              </DialogTitle>
               <DialogDescription>
                 Every week - this is part of the weekly timetable.
               </DialogDescription>
