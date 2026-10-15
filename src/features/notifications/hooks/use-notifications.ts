@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 
 import { getNotificationsAction } from "../actions/notification-queries";
+import { useUnreadCount } from "../context/unread-count-context";
 import type { NotificationSummary } from "../types";
 import { useNotificationMutations } from "./use-notification-mutations";
 
@@ -20,7 +21,11 @@ interface UseNotificationsOptions {
  */
 export function useNotifications({ initialUnreadCount }: UseNotificationsOptions) {
   const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
-  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+  // Inside the app shell the count is shared with the sidebar dot (see
+  // UnreadCountProvider); the local state is only a fallback outside it.
+  const shared = useUnreadCount();
+  const [localUnreadCount, setLocalUnreadCount] = useState(initialUnreadCount);
+  const unreadCount = shared ? shared.count : localUnreadCount;
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -66,7 +71,10 @@ export function useNotifications({ initialUnreadCount }: UseNotificationsOptions
   const { markRead, markAllRead, remove } = useNotificationMutations({
     notifications,
     setNotifications,
-    onUnreadDelta: (delta) => setUnreadCount((previous) => Math.max(0, previous + delta)),
+    onUnreadDelta: (delta) =>
+      shared
+        ? shared.adjust(delta)
+        : setLocalUnreadCount((previous) => Math.max(0, previous + delta)),
   });
 
   return {

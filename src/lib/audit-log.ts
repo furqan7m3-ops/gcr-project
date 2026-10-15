@@ -3,7 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { ActivityAction } from "@/generated/prisma/enums";
 
 export type AuditEntityType =
-  "User" | "Classroom" | "Assignment" | "Announcement" | "Material" | "Comment";
+  "User" | "Classroom" | "Assignment" | "Announcement" | "Material" | "Comment" | "TimetableClash";
 
 interface AdminAuditEventDefinition {
   entityType: AuditEntityType;
@@ -47,6 +47,13 @@ export const ADMIN_AUDIT_EVENTS: AdminAuditEventDefinition[] = [
   { entityType: "User", action: ActivityAction.LOCKED, label: "Account Locked" },
   { entityType: "User", action: ActivityAction.UNLOCKED, label: "Account Unlocked" },
   { entityType: "User", action: ActivityAction.SESSION_TERMINATED, label: "Session Terminated" },
+
+  // Timetable clash handling
+  {
+    entityType: "TimetableClash",
+    action: ActivityAction.UPDATED,
+    label: "Timetable Clash Resolved",
+  },
 ];
 
 export function getAdminAuditEventLabel(

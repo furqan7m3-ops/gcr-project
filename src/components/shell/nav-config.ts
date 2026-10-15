@@ -5,6 +5,8 @@ import {
   Bell,
   BookOpen,
   Calendar,
+  CalendarClock,
+  CalendarX,
   ClipboardCheck,
   ClipboardList,
   Home,
@@ -26,6 +28,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Roles that can see this item. Omit to show it to everyone. */
   roles?: UserRole[];
+  /** Show a red dot while the user has unread notifications. */
+  showUnreadDot?: boolean;
 }
 
 export interface NavSection {
@@ -37,8 +41,9 @@ export const navSections: NavSection[] = [
   {
     items: [
       { label: "Home", href: "/dashboard", icon: Home },
-      { label: "Notifications", href: "/notifications", icon: Bell },
+      { label: "Notifications", href: "/notifications", icon: Bell, showUnreadDot: true },
       { label: "Calendar", href: "/calendar", icon: Calendar },
+      { label: "Timetable", href: "/timetable", icon: CalendarClock },
       {
         label: "To-do",
         href: "/todo",
@@ -79,6 +84,12 @@ export const navSections: NavSection[] = [
         label: "Moderation",
         href: "/admin/moderation",
         icon: ShieldAlert,
+        roles: [UserRole.ADMIN],
+      },
+      {
+        label: "Timetable clashes",
+        href: "/admin/timetable",
+        icon: CalendarX,
         roles: [UserRole.ADMIN],
       },
       { label: "Reports", href: "/admin/reports", icon: BarChart3, roles: [UserRole.ADMIN] },

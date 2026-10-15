@@ -13,6 +13,12 @@ export async function getNotifications(options: ListNotificationsInput): Promise
   return notificationService.listNotifications(user.id, options);
 }
 
+/** Marks every notification read for the current user - run when the notifications page is opened. */
+export async function markAllNotificationsReadOnOpen(): Promise<void> {
+  const user = await requireUser();
+  await notificationService.markAllNotificationsRead(user.id);
+}
+
 export async function getUnreadNotificationCount(): Promise<number> {
   const user = await requireUser();
   return notificationService.getUnreadCount(user.id);

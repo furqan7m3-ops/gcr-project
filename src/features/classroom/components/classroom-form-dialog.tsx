@@ -70,7 +70,7 @@ export function ClassroomFormDialog({
             <DialogTitle>{mode === "create" ? "Create class" : "Edit class"}</DialogTitle>
             <DialogDescription>
               {mode === "create"
-                ? "Give your class a name and a few optional details. You can change these later."
+                ? "Give your class a name and a section (required), plus a few optional details. You can change these later."
                 : "Update your class details."}
             </DialogDescription>
           </DialogHeader>
@@ -102,6 +102,7 @@ export function ClassroomFormDialog({
                   id="section"
                   name="section"
                   defaultValue={classroom?.section ?? ""}
+                  required
                   maxLength={50}
                 />
                 {fieldErrors?.section ? (
@@ -120,14 +121,6 @@ export function ClassroomFormDialog({
                   <p className="text-xs text-destructive">{fieldErrors.subject[0]}</p>
                 ) : null}
               </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="room">Room</Label>
-              <Input id="room" name="room" defaultValue={classroom?.room ?? ""} maxLength={50} />
-              {fieldErrors?.room ? (
-                <p className="text-xs text-destructive">{fieldErrors.room[0]}</p>
-              ) : null}
             </div>
 
             <div className="flex flex-col gap-1.5">

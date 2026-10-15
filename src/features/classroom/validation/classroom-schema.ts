@@ -17,9 +17,12 @@ export const createClassroomSchema = z.object({
     .trim()
     .min(2, "Class name must be at least 2 characters.")
     .max(100, "Class name must be at most 100 characters."),
-  section: optionalTrimmed(50, "Section"),
+  section: z
+    .string()
+    .trim()
+    .min(1, "Section is required.")
+    .max(50, "Section must be at most 50 characters."),
   subject: optionalTrimmed(100, "Subject"),
-  room: optionalTrimmed(50, "Room"),
   description: optionalTrimmed(2000, "Description"),
 });
 
