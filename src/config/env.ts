@@ -12,6 +12,8 @@ const envSchema = z.object({
   // adds itself as another enum value here and a matching case in
   // getStorageProvider(), nothing else in the app needs to change.
   STORAGE_DRIVER: z.enum(["local"]).default("local"),
+  // Absolute path for the "local" driver's files. Unset = <project>/storage/uploads.
+  STORAGE_ROOT: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

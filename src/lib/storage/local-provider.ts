@@ -5,10 +5,12 @@ import { Readable } from "node:stream";
 
 import type { StorageProvider } from "./provider";
 
-// Local disk, inside the project, gitignored - see .gitignore. This is the
-// development default; STORAGE_ROOT never leaves the process's own working
-// directory, so nothing here depends on any external service being up.
-const STORAGE_ROOT = resolve(process.cwd(), "storage", "uploads");
+// Local disk. Defaults to storage/uploads inside the project (gitignored - see
+// .gitignore). In production, set STORAGE_ROOT to a persistent volume mount
+// (e.g. a Railway Volume at /data/uploads) so uploads survive redeploys.
+const STORAGE_ROOT = resolve(
+  process.env.STORAGE_ROOT || resolve(process.cwd(), "storage", "uploads"),
+);
 
 /**
  * Resolves a storage key to an absolute path, refusing anything that would
