@@ -26,8 +26,15 @@ const playfair = Playfair_Display({
 
 // The tab title follows the admin-editable platform name (Admin > Settings),
 // so it always matches what the navbar shows.
+const FALLBACK_PLATFORM_NAME = "Elevate Institute of Tourism & Hospitality Management";
+
 export async function generateMetadata(): Promise<Metadata> {
-  const { platformName } = await getSystemSettings();
+  // The root layout also wraps pages prerendered at build time (e.g.
+  // /_not-found), when the database isn't reachable on Railway - fall back to
+  // the default name rather than failing the build (or a page's metadata).
+  const platformName = await getSystemSettings()
+    .then((settings) => settings.platformName)
+    .catch(() => FALLBACK_PLATFORM_NAME);
   return {
     title: platformName,
     description: `${platformName} - classroom management platform`,
