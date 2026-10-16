@@ -25,7 +25,7 @@ export function AdminMobileNav() {
             Admin
           </SheetTitle>
         </SheetHeader>
-        <div className="-mx-1 flex-1 overflow-y-auto">
+        <div className="scrollbar-on-hover -mx-1 flex-1 overflow-y-auto">
           <NavList sections={sections} onNavigate={() => setMobileOpen(false)} />
         </div>
       </SheetContent>

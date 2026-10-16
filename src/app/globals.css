@@ -59,6 +59,10 @@
   --sidebar-primary: var(--gold);
   --sidebar-ring: var(--gold);
 
+  /* Scrollbars */
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+
   --radius: 0.5rem;
 }
 
@@ -97,6 +101,9 @@
     --sidebar: var(--navy-deep);
     --sidebar-border: #13284f;
     --sidebar-accent: #102550;
+
+    --scrollbar-thumb: #2a4475;
+    --scrollbar-thumb-hover: #3d5a91;
   }
 }
 
@@ -159,4 +166,59 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+/*
+ * Thin, rounded scrollbars in place of the chunky OS default. Browsers that
+ * support the standard properties (Chrome 121+, Edge, Firefox) use those;
+ * Safari falls back to the ::-webkit-scrollbar rules below.
+ */
+@layer base {
+  /* In the base layer so utilities like scrollbar-on-hover can override it. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 9999px;
+      background-clip: padding-box;
+      background-color: var(--scrollbar-thumb);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-hover);
+    }
+  }
+}
+
+/*
+ * Navigation rails: the scrollbar stays invisible until the rail is hovered
+ * or holds keyboard focus. Its space is still reserved, so links don't shift.
+ */
+@utility scrollbar-on-hover {
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable;
+
+  &:hover,
+  &:focus-within {
+    scrollbar-color: var(--sidebar-muted) transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: transparent;
+  }
+
+  &:hover::-webkit-scrollbar-thumb,
+  &:focus-within::-webkit-scrollbar-thumb {
+    background-color: var(--sidebar-muted);
+  }
 }

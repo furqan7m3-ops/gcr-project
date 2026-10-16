@@ -24,7 +24,7 @@ export function AdminSidebar() {
         isCollapsed ? "w-20" : "w-64",
       )}
     >
-      <div className="flex h-full flex-col gap-2 overflow-y-auto px-3 py-4">
+      <div className="scrollbar-on-hover flex h-full flex-col gap-2 overflow-y-auto px-3 py-4">
         <NavList sections={sections} collapsed={isCollapsed} />
       </div>
     </aside>
