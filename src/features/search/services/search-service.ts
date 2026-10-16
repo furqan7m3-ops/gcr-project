@@ -79,7 +79,7 @@ async function searchClassrooms(
     title: classroom.title,
     description:
       [classroom.subject, classroom.section, classroom.code].filter(Boolean).join(" · ") || null,
-    href: `/classes/${classroom.id}`,
+    href: `/classes/${classroom.id}/stream`,
     classroomId: classroom.id,
     classroomTitle: classroom.title,
     updatedAt: classroom.updatedAt,

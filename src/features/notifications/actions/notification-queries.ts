@@ -30,12 +30,3 @@ export async function getNotificationsAction(
     return toErrorResult(error, "Couldn't load notifications. Please try again.");
   }
 }
-
-export async function getUnreadNotificationCountAction(): Promise<ActionResult<number>> {
-  try {
-    const count = await notificationQueries.getUnreadNotificationCount();
-    return { status: "success", data: count };
-  } catch (error) {
-    return toErrorResult(error, "Couldn't load your notification count.");
-  }
-}

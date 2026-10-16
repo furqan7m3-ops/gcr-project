@@ -11,9 +11,9 @@ import {
   type ReactNode,
 } from "react";
 
-import { getUnreadNotificationCountAction } from "../actions/notification-queries";
-
 const NOTIFICATIONS_PATH = "/notifications";
+// A plain GET route, not a Server Action - see the route handler for why.
+const UNREAD_COUNT_URL = "/api/notifications/unread-count";
 const POLL_INTERVAL_MS = 30_000;
 
 interface UnreadCountValue {
@@ -66,10 +66,11 @@ export function UnreadCountProvider({
 
     let cancelled = false;
     const refresh = () => {
-      getUnreadNotificationCountAction()
-        .then((result) => {
-          if (!cancelled && result.status === "success") {
-            setCount(result.data);
+      fetch(UNREAD_COUNT_URL, { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((body: { count?: unknown } | null) => {
+          if (!cancelled && typeof body?.count === "number") {
+            setCount(body.count);
           }
         })
         .catch(() => {

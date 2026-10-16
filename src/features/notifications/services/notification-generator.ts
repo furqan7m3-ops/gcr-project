@@ -348,7 +348,7 @@ export async function notifyClassroomCreated(params: {
       type: NotificationType.CLASS_CREATED,
       title: "Class created",
       message: `${params.creatorName} created ${params.classroomTitle}.`,
-      link: `/classes/${params.classroomId}`,
+      link: `/classes/${params.classroomId}/stream`,
     });
   } catch (error) {
     console.error("notifyClassroomCreated failed:", error);
@@ -366,7 +366,7 @@ export async function notifyClassroomArchived(params: {
       type: NotificationType.CLASS_ARCHIVED,
       title: "Class archived",
       message: `${params.archivedByName} archived ${params.classroomTitle}.`,
-      link: `/classes/${params.classroomId}`,
+      link: `/classes/${params.classroomId}/stream`,
     });
   } catch (error) {
     console.error("notifyClassroomArchived failed:", error);

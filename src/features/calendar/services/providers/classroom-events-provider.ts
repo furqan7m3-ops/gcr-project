@@ -39,7 +39,7 @@ async function getClassroomEvents(
     start: classroom.createdAt,
     end: classroom.createdAt,
     allDay: true,
-    href: `/classes/${classroom.id}`,
+    href: `/classes/${classroom.id}/stream`,
     classroomId: classroom.id,
     classroomTitle: classroom.title,
     description: null,

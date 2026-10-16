@@ -39,7 +39,7 @@ export function ClassroomCard({ classroom }: { classroom: ClassroomSummary }) {
       </div>
       <div className="flex items-start justify-between gap-2 px-4 pt-3">
         <Link
-          href={`/classes/${classroom.id}`}
+          href={`/classes/${classroom.id}/stream`}
           className="min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <p className="truncate font-serif text-lg font-semibold text-primary dark:text-foreground">
