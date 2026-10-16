@@ -41,6 +41,8 @@ export function ClassroomFormDialog({
   const formRef = useRef<HTMLFormElement>(null);
   const [removeCover, setRemoveCover] = useState(false);
 
+  // Create redirects into the new class from the action itself, so a success
+  // state only ever arrives here for edits.
   useEffect(() => {
     if (!state) {
       return;

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { requireRole, requireUser } from "@/lib/auth/permissions";
 import { extractUploadedFiles } from "@/lib/storage/extract-files";
@@ -20,6 +21,7 @@ export async function createClassroomAction(
   _prevState: ActionResult<ClassroomSummary> | null,
   formData: FormData,
 ): Promise<ActionResult<ClassroomSummary>> {
+  let classroom: ClassroomSummary;
   try {
     const user = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
 
@@ -33,14 +35,16 @@ export async function createClassroomAction(
     }
 
     const coverImage = extractUploadedFiles(formData, "coverImage")[0];
-    const classroom = await classroomService.createClassroom(user.id, parsed.data, coverImage);
+    classroom = await classroomService.createClassroom(user.id, parsed.data, coverImage);
     revalidatePath("/classes");
     revalidatePath("/dashboard");
-
-    return { status: "success", data: classroom };
   } catch (error) {
     return toErrorResult(error, "Couldn't create the class. Please try again.");
   }
+
+  // Same as joinClassroomAction: redirect server-side (outside the try) so the
+  // client doesn't race a router.push against the /classes revalidation.
+  redirect(`/classes/${classroom.id}/stream`);
 }
 
 export async function updateClassroomAction(
@@ -114,6 +118,7 @@ export async function joinClassroomAction(
   _prevState: ActionResult<ClassroomSummary> | null,
   formData: FormData,
 ): Promise<ActionResult<ClassroomSummary>> {
+  let classroom: ClassroomSummary;
   try {
     const user = await requireUser();
 
@@ -126,14 +131,18 @@ export async function joinClassroomAction(
       };
     }
 
-    const classroom = await classroomService.joinClassroomByCode(user, parsed.data.code);
+    classroom = await classroomService.joinClassroomByCode(user, parsed.data.code);
     revalidatePath("/classes");
     revalidatePath("/dashboard");
-
-    return { status: "success", data: classroom };
   } catch (error) {
     return toErrorResult(error, "Couldn't join the class. Please try again.");
   }
+
+  // Redirect from the action (outside the try - redirect() throws a control-flow
+  // exception) so revalidation and navigation land in one roundtrip. Pushing
+  // from the client after the action raced the /classes refresh and
+  // intermittently tripped the classroom error boundary.
+  redirect(`/classes/${classroom.id}/stream`);
 }
 
 export async function leaveClassroomAction(classroomId: string): Promise<ActionResult<undefined>> {

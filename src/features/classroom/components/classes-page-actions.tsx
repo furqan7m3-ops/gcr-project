@@ -39,12 +39,7 @@ export function ClassesPageActions({ canCreate }: { canCreate: boolean }) {
       ) : null}
 
       {canCreate ? (
-        <ClassroomFormDialog
-          mode="create"
-          open={createOpen}
-          onOpenChange={setCreateOpen}
-          onSaved={(classroom) => router.push(`/classes/${classroom.id}`)}
-        />
+        <ClassroomFormDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />
       ) : null}
       <JoinClassroomDialog open={joinOpen} onOpenChange={setJoinOpen} defaultCode={inviteCode} />
     </div>

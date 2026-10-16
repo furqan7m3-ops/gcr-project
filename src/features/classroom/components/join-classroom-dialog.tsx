@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -28,22 +27,14 @@ interface JoinClassroomDialogProps {
 }
 
 export function JoinClassroomDialog({ open, onOpenChange, defaultCode }: JoinClassroomDialogProps) {
-  const router = useRouter();
+  // On success the action redirects into the class itself, so state only ever
+  // carries errors here.
   const [state, formAction, isPending] = useActionState(joinClassroomAction, initialState);
 
   useEffect(() => {
-    if (!state) {
-      return;
-    }
-
-    if (state.status === "success") {
-      toast.success(`Joined ${state.data.title}`);
-      onOpenChange(false);
-      router.push(`/classes/${state.data.id}`);
-    } else if (!state.fieldErrors) {
+    if (state?.status === "error" && !state.fieldErrors) {
       toast.error(state.message);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   const fieldErrors = state?.status === "error" ? state.fieldErrors : undefined;
