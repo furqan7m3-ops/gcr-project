@@ -1,5 +1,6 @@
 import { PageContainer } from "@/components/page/page-container";
 import { SectionHeader } from "@/components/page/section-header";
+import { getUserClassroomsAction } from "@/features/classroom/actions/classroom-queries";
 import { StudentDashboardView } from "@/features/dashboard/components/student-dashboard-view";
 import { TeacherDashboardView } from "@/features/dashboard/components/teacher-dashboard-view";
 import {
@@ -30,14 +31,17 @@ export default async function DashboardPage() {
     );
   }
 
-  const data = await getStudentDashboardData();
+  const [data, classrooms] = await Promise.all([
+    getStudentDashboardData(),
+    getUserClassroomsAction(),
+  ]);
   return (
     <PageContainer>
       <SectionHeader
         title="Dashboard"
         description="Your classes, upcoming deadlines, and archived classes at a glance."
       />
-      <StudentDashboardView data={data} />
+      <StudentDashboardView data={data} classrooms={classrooms} />
     </PageContainer>
   );
 }

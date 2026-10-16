@@ -20,7 +20,7 @@ export function AccountStatusPanel({ items }: { items: AccountStatusBreakdownIte
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-primary"
+                className="h-full rounded-full bg-gold"
                 style={{ width: `${(item.count / total) * 100}%` }}
               />
             </div>

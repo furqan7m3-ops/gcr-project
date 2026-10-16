@@ -43,7 +43,7 @@ export function Breadcrumbs({ items, homeHref = "/dashboard", className }: Bread
               </Link>
             ) : (
               <span
-                className={isLast ? "font-medium text-foreground" : "text-muted-foreground"}
+                className={isLast ? "font-medium text-primary" : "text-muted-foreground"}
                 aria-current={isLast ? "page" : undefined}
               >
                 {item.label}

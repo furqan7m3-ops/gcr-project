@@ -10,7 +10,7 @@ export const statusLabels: Record<ModerationStatus, string> = {
 };
 
 export const statusBadgeVariant: Record<ModerationStatus, NonNullable<BadgeProps["variant"]>> = {
-  ACTIVE: "default",
+  ACTIVE: "success",
   ARCHIVED: "secondary",
   DELETED: "destructive",
 };

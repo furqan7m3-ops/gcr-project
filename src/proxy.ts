@@ -64,5 +64,7 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Static branding (app icon + public/brand logos) must load on the logged-out
+  // login page too, so it skips the auth redirect entirely.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|brand/).*)"],
 };

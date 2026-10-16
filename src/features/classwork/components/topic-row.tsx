@@ -62,7 +62,7 @@ export function TopicRow({
       ref={sortable ? setNodeRef : undefined}
       style={style}
       className={cn(
-        "flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5",
+        "flex items-center gap-2 rounded-lg border border-border border-b-2 border-b-gold/70 bg-card px-3 py-2.5",
         isDragging && "z-10 shadow-md",
       )}
     >
@@ -101,7 +101,9 @@ export function TopicRow({
         </form>
       ) : (
         <>
-          <p className="flex-1 truncate text-sm font-medium text-foreground">{topic.title}</p>
+          <p className="flex-1 truncate text-base font-semibold text-primary dark:text-foreground">
+            {topic.title}
+          </p>
           {canManage ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

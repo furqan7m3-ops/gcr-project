@@ -164,7 +164,7 @@ export function ClassroomFormDialog({
                 name="coverImage"
                 type="file"
                 accept="image/jpeg,image/png,image/gif,image/webp"
-                className="text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+                className="text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
               />
               <input type="hidden" name="removeCoverImage" value={removeCover ? "true" : "false"} />
               <p className="text-xs text-muted-foreground">

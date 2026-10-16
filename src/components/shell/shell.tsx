@@ -44,7 +44,7 @@ export function Shell({ user, initialUnreadCount, platformName, children }: Shel
               />
               <div className="flex flex-1">
                 <Sidebar sections={sections} />
-                <MobileNav sections={sections} />
+                <MobileNav sections={sections} platformName={platformName} />
                 <main
                   id="main-content"
                   tabIndex={-1}

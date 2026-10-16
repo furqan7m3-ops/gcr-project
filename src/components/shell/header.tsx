@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { GraduationCap, Menu, Search } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useSearchDialog } from "@/features/search/context/search-dialog-context";
@@ -14,7 +15,7 @@ import { UserMenu, type ShellUser } from "./user-menu";
 export function Header({
   user,
   initialUnreadCount,
-  platformName = "GCR",
+  platformName = "Elevate Institute of Tourism & Hospitality Management",
 }: {
   user: ShellUser;
   initialUnreadCount: number;
@@ -35,13 +36,21 @@ export function Header({
   }
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-card px-3 sm:px-4">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 border-b border-border border-t-[3px] border-t-gold bg-card px-3 sm:px-4">
       <Button variant="ghost" size="icon" aria-label="Toggle navigation" onClick={handleMenuClick}>
         <Menu className="h-5 w-5" />
       </Button>
-      <Link href="/dashboard" className="flex items-center gap-2 pr-2">
-        <GraduationCap className="h-6 w-6 text-primary" aria-hidden />
-        <span className="hidden text-lg font-medium text-foreground sm:inline">{platformName}</span>
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-2.5 rounded-md pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`${platformName} - Dashboard`}
+      >
+        <Image src="/brand/logo.png" alt="" width={32} height={32} className="h-8 w-8" />
+        {/* The institute name is long - let it wrap to two tight lines instead
+            of crowding out the search bar. */}
+        <span className="hidden max-w-60 font-serif text-sm font-semibold leading-tight text-primary line-clamp-2 sm:block dark:text-foreground">
+          {platformName}
+        </span>
       </Link>
       <div className="flex flex-1 items-center justify-end gap-1 md:justify-start">
         <SearchBar className="hidden md:flex" />

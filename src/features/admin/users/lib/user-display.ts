@@ -11,10 +11,10 @@ export const statusLabels: Record<UserStatus, string> = {
 };
 
 export const statusBadgeVariant: Record<UserStatus, NonNullable<BadgeProps["variant"]>> = {
-  ACTIVE: "default",
+  ACTIVE: "success",
   INACTIVE: "secondary",
   SUSPENDED: "destructive",
-  PENDING_PASSWORD_CHANGE: "outline",
+  PENDING_PASSWORD_CHANGE: "warning",
   ARCHIVED: "outline",
   LOCKED: "destructive",
 };

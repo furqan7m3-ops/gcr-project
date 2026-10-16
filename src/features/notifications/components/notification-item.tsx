@@ -29,7 +29,7 @@ export function NotificationItem({ notification, onMarkRead, onRemove }: Notific
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
           {!notification.isRead ? (
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-gold" aria-label="Unread" />
           ) : null}
           <p className="truncate text-sm font-medium text-foreground">{notification.title}</p>
         </div>
@@ -45,7 +45,7 @@ export function NotificationItem({ notification, onMarkRead, onRemove }: Notific
     <div
       className={cn(
         "flex items-start gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-accent",
-        !notification.isRead && "bg-primary/5",
+        !notification.isRead && "bg-gold-soft/70",
       )}
     >
       {/* Clicking (or activating via keyboard) opens the related resource and

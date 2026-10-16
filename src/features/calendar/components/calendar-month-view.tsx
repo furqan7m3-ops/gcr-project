@@ -69,7 +69,7 @@ export function CalendarMonthView({ date, events, filters }: CalendarMonthViewPr
                   "flex h-6 w-6 items-center justify-center self-end rounded-full text-xs font-medium transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   today
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-gold font-semibold text-gold-foreground"
                     : inCurrentMonth
                       ? "text-foreground hover:bg-accent"
                       : "text-muted-foreground hover:bg-accent",

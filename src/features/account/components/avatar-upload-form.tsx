@@ -60,7 +60,7 @@ export function AvatarUploadForm({ name, email, avatarUrl }: AvatarUploadFormPro
           type="file"
           accept="image/jpeg,image/png,image/gif,image/webp"
           disabled={isPending}
-          className="text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+          className="text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
         />
         <p className="text-xs text-muted-foreground">JPEG, PNG, GIF, or WebP - up to 5MB.</p>
         <Button type="submit" size="sm" className="w-fit" disabled={isPending}>

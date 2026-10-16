@@ -18,13 +18,13 @@ export function StatCard({ label, value, icon: Icon, hint, className, href }: St
   const body = (
     <CardContent className="flex items-start justify-between gap-4 p-5">
       <div className="flex flex-col gap-1">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="text-2xl font-semibold text-foreground">{value}</p>
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <p className="text-2xl font-semibold tabular-nums text-foreground">{value}</p>
         {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       </div>
       {Icon ? (
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <Icon className="h-5 w-5 text-primary" aria-hidden />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gold-soft">
+          <Icon className="h-5 w-5 text-navy dark:text-gold" aria-hidden />
         </div>
       ) : null}
     </CardContent>
@@ -33,7 +33,7 @@ export function StatCard({ label, value, icon: Icon, hint, className, href }: St
   const cardClassName = cn(
     "transition-shadow hover:shadow-md",
     href
-      ? "hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      ? "hover:border-gold/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       : null,
     className,
   );

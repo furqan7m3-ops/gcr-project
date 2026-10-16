@@ -18,13 +18,15 @@ export function ClassroomCard({ classroom }: { classroom: ClassroomSummary }) {
   const isArchived = classroom.status === "ARCHIVED";
 
   return (
-    <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
+    <Card className="flex flex-col overflow-hidden transition-shadow hover:border-gold/50 hover:shadow-md">
       <div className="relative">
         <ClassroomCover
           classroomId={classroom.id}
           title={classroom.title}
           section={classroom.section}
           hasCoverImage={classroom.hasCoverImage}
+          showTitle={false}
+          className="h-24"
         />
         {isArchived ? (
           <Badge
@@ -40,7 +42,9 @@ export function ClassroomCard({ classroom }: { classroom: ClassroomSummary }) {
           href={`/classes/${classroom.id}`}
           className="min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <p className="truncate text-base font-semibold text-foreground">{classroom.title}</p>
+          <p className="truncate font-serif text-lg font-semibold text-primary dark:text-foreground">
+            {classroom.title}
+          </p>
           {classroom.section ? (
             <p className="truncate text-sm text-muted-foreground">{classroom.section}</p>
           ) : null}
@@ -48,8 +52,13 @@ export function ClassroomCard({ classroom }: { classroom: ClassroomSummary }) {
         <ClassroomQuickActionsMenu classroom={classroom} canManage={canManage} />
       </div>
       <CardContent className="flex flex-1 flex-col justify-end gap-3 pt-2">
-        <p className="truncate text-sm text-muted-foreground">{classroom.ownerName}</p>
-        <p className="font-mono text-xs text-muted-foreground">{classroom.code}</p>
+        <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+          <p className="truncate text-sm text-muted-foreground">{classroom.ownerName}</p>
+          <p className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+            <span className="sr-only">Class code </span>
+            {classroom.code}
+          </p>
+        </div>
       </CardContent>
     </Card>
   );

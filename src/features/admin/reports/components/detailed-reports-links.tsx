@@ -61,10 +61,14 @@ export function DetailedReportsLinks() {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {links.map((link) => (
-        <Link key={link.href} href={link.href}>
-          <Card className="h-full transition-shadow hover:shadow-md">
+        <Link
+          key={link.href}
+          href={link.href}
+          className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Card className="h-full transition-shadow group-hover:border-gold/60 group-hover:shadow-md">
             <CardContent className="flex items-start gap-3 p-5">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary">
                 <link.icon className="h-5 w-5 text-primary" aria-hidden />
               </div>
               <div className="flex flex-col gap-1">

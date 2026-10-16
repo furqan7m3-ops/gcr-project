@@ -18,7 +18,7 @@ function SheetOverlay({
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
-      className={cn("fixed inset-0 z-50 bg-black/40", className)}
+      className={cn("fixed inset-0 z-50 bg-navy-deep/50", className)}
       {...props}
     />
   );
@@ -49,7 +49,7 @@ function SheetContent({ side = "left", className, children, ...props }: SheetCon
       <SheetOverlay />
       <DialogPrimitive.Content className={cn(sheetVariants({ side }), className)} {...props}>
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1.5 text-current opacity-70 transition hover:bg-current/10 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

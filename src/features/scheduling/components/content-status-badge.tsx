@@ -21,7 +21,7 @@ export function ContentStatusBadge({ status, scheduledFor }: ContentStatusBadgeP
 
   if (status === "SCHEDULED") {
     return (
-      <Badge variant="default" className="gap-1">
+      <Badge variant="gold" className="gap-1">
         <CalendarClock className="h-3 w-3" aria-hidden />
         {scheduledFor ? `Scheduled · ${formatScheduledFor(scheduledFor)}` : "Scheduled"}
       </Badge>

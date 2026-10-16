@@ -20,7 +20,7 @@ export function ClassroomHeader({ classroom }: { classroom: ClassroomSummary }) 
           title={classroom.title}
           section={classroom.section}
           hasCoverImage={classroom.hasCoverImage}
-          className="h-40 rounded-none sm:h-48"
+          className="h-40 rounded-none sm:h-48 [&>p:first-of-type]:text-2xl sm:[&>p:first-of-type]:text-3xl"
         />
         {isArchived ? (
           <Badge

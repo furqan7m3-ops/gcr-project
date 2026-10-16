@@ -23,7 +23,7 @@ export function SearchBar({ className }: { className?: string }) {
       type="button"
       onClick={() => setOpen(true)}
       className={cn(
-        "flex w-full max-w-md items-center gap-2 rounded-full border border-transparent bg-muted px-3.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-input hover:bg-card",
+        "flex w-full max-w-md items-center gap-2 rounded-lg border border-border bg-muted px-3.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-input hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
         className,
       )}
       aria-label="Search classes, people, and files"

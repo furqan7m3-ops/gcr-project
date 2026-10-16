@@ -29,8 +29,8 @@ export function MaterialCard({ material, classroomId, topics }: MaterialCardProp
   return (
     <Card>
       <CardContent className="flex items-start gap-3 p-4">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <Icon className="h-4 w-4 text-primary" aria-hidden />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
+          <Icon className="h-4 w-4 text-navy-secondary dark:text-foreground" aria-hidden />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">

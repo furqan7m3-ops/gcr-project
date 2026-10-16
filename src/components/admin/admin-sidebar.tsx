@@ -20,7 +20,7 @@ export function AdminSidebar() {
   return (
     <aside
       className={cn(
-        "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 lg:flex",
+        "sticky top-16 hidden h-[calc(100dvh-4rem)] shrink-0 flex-col self-start border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex",
         isCollapsed ? "w-20" : "w-64",
       )}
     >

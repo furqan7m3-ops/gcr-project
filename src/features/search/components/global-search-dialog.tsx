@@ -139,7 +139,7 @@ export function GlobalSearchDialog({ userKey }: { userKey: string }) {
             ) : (
               <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
                 <Search className="h-8 w-8 text-muted-foreground" aria-hidden />
-                <p className="mt-2 text-sm font-medium text-foreground">Search GCR</p>
+                <p className="mt-2 text-sm font-medium text-foreground">Search EITHM</p>
                 <p className="text-xs text-muted-foreground">
                   Find classes, announcements, assignments, materials, and topics.
                 </p>

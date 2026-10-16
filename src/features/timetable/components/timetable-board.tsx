@@ -165,7 +165,7 @@ export function TimetableBoard({
                 className={cn(
                   "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
                   view === option.value
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-gold font-semibold text-white"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >

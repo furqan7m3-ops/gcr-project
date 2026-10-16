@@ -47,7 +47,7 @@ export function Pagination({ page, totalPages, total, pageSize, itemLabel }: Pag
               <ChevronLeft className="h-4 w-4" /> Previous
             </Link>
           ) : (
-            <span>
+            <span className="inline-flex items-center gap-2">
               <ChevronLeft className="h-4 w-4" /> Previous
             </span>
           )}
@@ -67,7 +67,7 @@ export function Pagination({ page, totalPages, total, pageSize, itemLabel }: Pag
               Next <ChevronRight className="h-4 w-4" />
             </Link>
           ) : (
-            <span>
+            <span className="inline-flex items-center gap-2">
               Next <ChevronRight className="h-4 w-4" />
             </span>
           )}

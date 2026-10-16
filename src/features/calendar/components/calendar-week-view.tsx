@@ -55,7 +55,7 @@ export function CalendarWeekView({ date, events, filters }: CalendarWeekViewProp
               <span
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium",
-                  today ? "bg-primary text-primary-foreground" : "text-foreground",
+                  today ? "bg-gold font-semibold text-gold-foreground" : "text-foreground",
                 )}
               >
                 {formatDayNumber(day)}

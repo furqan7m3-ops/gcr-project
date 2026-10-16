@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
+import Image from "next/image";
 
 import { getVisibleSections } from "@/components/shell/nav-config";
 import { NavList } from "@/components/shell/nav-list";
@@ -15,10 +15,13 @@ export function AdminMobileNav() {
 
   return (
     <Sheet open={isMobileOpen} onOpenChange={setMobileOpen}>
-      <SheetContent side="left" className="w-72 gap-6 lg:hidden">
+      <SheetContent
+        side="left"
+        className="w-72 gap-6 border-sidebar-border bg-sidebar text-sidebar-foreground lg:hidden"
+      >
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" aria-hidden />
+          <SheetTitle className="flex items-center gap-2 font-serif text-sidebar-accent-foreground">
+            <Image src="/brand/logo.png" alt="" width={32} height={32} className="h-7 w-7" />
             Admin
           </SheetTitle>
         </SheetHeader>

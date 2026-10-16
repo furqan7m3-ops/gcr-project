@@ -717,7 +717,7 @@ model TimetableClash {
 // letting a second settings row ever be created.
 model SystemSettings {
   id                       String   @id @db.Uuid
-  platformName             String   @default("GCR")
+  platformName             String   @default("Elevate Institute of Tourism & Hospitality Management")
   academicYear             String   @default("2025-2026")
   sessionTimeoutMinutes    Int      @default(60)
   maxUploadSizeMb          Int      @default(25)

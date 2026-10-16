@@ -47,11 +47,11 @@ export const SUBMISSION_DISPLAY_STATUS_LABEL: Record<SubmissionDisplayStatus, st
 
 export const SUBMISSION_DISPLAY_STATUS_BADGE_VARIANT: Record<
   SubmissionDisplayStatus,
-  "default" | "secondary" | "outline" | "destructive"
+  "default" | "secondary" | "outline" | "destructive" | "success"
 > = {
   NOT_SUBMITTED: "outline",
   DRAFT: "outline",
-  SUBMITTED: "default",
+  SUBMITTED: "success",
   LATE: "destructive",
   RETURNED: "secondary",
 };

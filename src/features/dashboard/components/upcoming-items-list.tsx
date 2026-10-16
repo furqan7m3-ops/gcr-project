@@ -40,16 +40,18 @@ export function UpcomingItemsList({ items, emptyTitle, emptyDescription }: Upcom
             <li key={item.id}>
               <Link
                 href={item.href}
-                className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-accent"
+                className="flex items-center gap-3 px-4 py-3 text-sm outline-none transition-colors hover:bg-accent focus-visible:bg-accent"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Icon className="h-4 w-4 text-primary" aria-hidden />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
+                  <Icon className="h-4 w-4 text-navy-secondary dark:text-gold" aria-hidden />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium text-foreground">{item.title}</span>
                   <span className="truncate text-xs text-muted-foreground">{item.subtitle}</span>
                 </div>
-                <span className="shrink-0 text-xs text-muted-foreground">{item.dateLabel}</span>
+                <span className="shrink-0 rounded-md bg-gold-soft px-2 py-1 text-xs font-medium text-gold-foreground dark:text-gold">
+                  {item.dateLabel}
+                </span>
               </Link>
             </li>
           );

@@ -23,7 +23,7 @@ export function TodoAssignmentCard({ item }: { item: TodoAssignmentItem }) {
   return (
     <Card>
       <CardContent className="flex items-start gap-3 p-4">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
           <ClipboardList className="h-4 w-4 text-primary" aria-hidden />
         </div>
 

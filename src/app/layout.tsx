@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import { Toaster } from "sonner";
+
+import { getSystemSettings } from "@/lib/system-settings";
 
 import "./globals.css";
 
@@ -14,10 +16,23 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "GCR",
-  description: "Production-ready foundation for the GCR classroom management platform",
-};
+// Academic serif reserved for page titles and major headings (Tailwind's
+// font-serif, see globals.css); everything else stays on Geist Sans.
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  weight: ["600", "700"],
+});
+
+// The tab title follows the admin-editable platform name (Admin > Settings),
+// so it always matches what the navbar shows.
+export async function generateMetadata(): Promise<Metadata> {
+  const { platformName } = await getSystemSettings();
+  return {
+    title: platformName,
+    description: `${platformName} - classroom management platform`,
+  };
+}
 
 export default function RootLayout({
   children,
@@ -25,10 +40,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col">
         {children}
-        <Toaster position="bottom-right" richColors closeButton />
+        <Toaster
+          position="bottom-right"
+          richColors
+          closeButton
+          toastOptions={{ classNames: { toast: "font-sans rounded-lg shadow-md" } }}
+        />
       </body>
     </html>
   );

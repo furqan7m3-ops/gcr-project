@@ -20,7 +20,7 @@ export function SearchResultRow({ item, query, onClick }: SearchResultRowProps) 
       onClick={onClick}
       className="flex items-start gap-2.5 rounded-md px-2 py-2 text-left hover:bg-accent"
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary">
         <Icon className="h-4 w-4 text-primary" aria-hidden />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">

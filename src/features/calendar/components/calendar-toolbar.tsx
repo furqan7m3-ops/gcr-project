@@ -64,7 +64,7 @@ export function CalendarToolbar({
             className={cn(
               "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
               mode === view
-                ? "bg-primary text-primary-foreground"
+                ? "bg-gold font-semibold text-white"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >

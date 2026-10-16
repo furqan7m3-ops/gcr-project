@@ -59,12 +59,17 @@ function FilterChip({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
         active
-          ? "border-primary bg-primary/10 text-primary"
+          ? "border-gold bg-gold-soft text-gold-foreground dark:text-gold"
           : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground",
       )}
     >
       {label}
-      <span className={cn("text-xs", active ? "text-primary" : "text-muted-foreground")}>
+      <span
+        className={cn(
+          "text-xs",
+          active ? "text-gold-foreground dark:text-gold" : "text-muted-foreground",
+        )}
+      >
         {count}
       </span>
     </Link>

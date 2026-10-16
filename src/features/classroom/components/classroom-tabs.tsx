@@ -28,8 +28,8 @@ export function ClassroomTabs({ classroomId }: { classroomId: string }) {
             className={cn(
               "shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               isActive
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground",
+                ? "border-gold font-semibold text-primary dark:text-foreground"
+                : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
             )}
           >
             {tab.label}

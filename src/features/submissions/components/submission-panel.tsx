@@ -239,7 +239,7 @@ export function SubmissionPanel({
                   accept={UPLOAD_ACCEPT_ATTRIBUTE}
                   onChange={handleFilesSelected}
                   disabled={isBusy}
-                  className="text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-secondary-foreground"
+                  className="text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-secondary-foreground"
                 />
                 <p className="text-xs text-muted-foreground">
                   PDF, Word, PowerPoint, Excel, text, ZIP, images, and videos - up to 25MB each.

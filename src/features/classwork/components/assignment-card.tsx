@@ -21,8 +21,8 @@ export function AssignmentCard({ assignment, classroomId, topics }: AssignmentCa
   return (
     <Card>
       <CardContent className="flex items-start gap-3 p-4">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <ClipboardList className="h-4 w-4 text-primary" aria-hidden />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold-soft">
+          <ClipboardList className="h-4 w-4 text-navy dark:text-gold" aria-hidden />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -42,7 +42,7 @@ export function AssignmentCard({ assignment, classroomId, topics }: AssignmentCa
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             {dueDateLabel ? (
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 font-medium text-foreground">
                 <CalendarClock className="h-3 w-3" aria-hidden />
                 {dueDateLabel}
               </span>

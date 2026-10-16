@@ -8,7 +8,7 @@ export const statusLabels: Record<ClassroomStatus, string> = {
 };
 
 export const statusBadgeVariant: Record<ClassroomStatus, NonNullable<BadgeProps["variant"]>> = {
-  ACTIVE: "default",
+  ACTIVE: "success",
   ARCHIVED: "secondary",
   DELETED: "destructive",
 };

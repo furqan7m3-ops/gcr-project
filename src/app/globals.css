@@ -1,65 +1,113 @@
 @import "tailwindcss";
 
+/*
+ * EITHM design tokens.
+ *
+ * Brand palette (navy + gold) is defined once here and everything else -
+ * semantic tokens, sidebar, status colors - is derived from it. Feature code
+ * should reach for the semantic utilities (bg-primary, text-muted-foreground,
+ * bg-sidebar, bg-gold-soft, ...) rather than raw hex or Tailwind palette
+ * colors. See docs/ui-architecture.md §5.
+ */
 :root {
   color-scheme: light;
-  --background: #f8f9fa;
-  --foreground: #1f1f1f;
+
+  /* Brand palette */
+  --navy: #0b214d;
+  --navy-deep: #071936;
+  --navy-secondary: #173968;
+  --gold: #f2a900;
+  --gold-hover: #d99200;
+  --gold-soft: #fff7e6;
+  --gold-foreground: #0b214d;
+
+  /* Semantic tokens */
+  --background: #f7f8fc;
+  --foreground: #14213d;
   --card: #ffffff;
-  --card-foreground: #1f1f1f;
+  --card-foreground: #14213d;
   --popover: #ffffff;
-  --popover-foreground: #1f1f1f;
-  --primary: #3457d5;
+  --popover-foreground: #14213d;
+  --primary: var(--navy);
   --primary-foreground: #ffffff;
-  --secondary: #eef1f8;
-  --secondary-foreground: #1f2a44;
-  --muted: #f1f3f4;
-  --muted-foreground: #5f6368;
-  --accent: #eef1f8;
-  --accent-foreground: #1f2a44;
-  --destructive: #d93025;
+  --secondary: #eef2f8;
+  --secondary-foreground: var(--navy-secondary);
+  --muted: #f1f4f9;
+  --muted-foreground: #64748b;
+  --accent: #eef2f8;
+  --accent-foreground: var(--navy);
+  --destructive: #b42318;
   --destructive-foreground: #ffffff;
-  --border: #e3e5e8;
-  --input: #e3e5e8;
-  --ring: #3457d5;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #3c4043;
-  --sidebar-border: #e3e5e8;
-  --sidebar-accent: #eef1f8;
-  --sidebar-accent-foreground: #3457d5;
-  --radius: 0.75rem;
+  --border: #e2e8f0;
+  /* Slightly darker than --border so form controls keep a visible edge. */
+  --input: #cbd5e1;
+  --ring: var(--navy-secondary);
+
+  /* Status tokens - always paired with a text label, never color alone. */
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --warning: #b45309;
+  --warning-soft: var(--gold-soft);
+
+  /* Navigation chrome: navy rail with gold active state. */
+  --sidebar: var(--navy);
+  --sidebar-foreground: #c9d3e6;
+  --sidebar-muted: #8a9bbd;
+  --sidebar-border: var(--navy-secondary);
+  --sidebar-accent: #132c5c;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-primary: var(--gold);
+  --sidebar-ring: var(--gold);
+
+  --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --background: #131314;
-    --foreground: #e8eaed;
-    --card: #1e1f20;
-    --card-foreground: #e8eaed;
-    --popover: #1e1f20;
-    --popover-foreground: #e8eaed;
-    --primary: #7c93f2;
-    --primary-foreground: #131314;
-    --secondary: #26282b;
-    --secondary-foreground: #e8eaed;
-    --muted: #26282b;
-    --muted-foreground: #9aa0a6;
-    --accent: #26282b;
-    --accent-foreground: #c7d0ff;
-    --destructive: #f28b82;
-    --destructive-foreground: #131314;
-    --border: #3c4043;
-    --input: #3c4043;
-    --ring: #7c93f2;
-    --sidebar: #1a1b1c;
-    --sidebar-foreground: #d0d3d6;
-    --sidebar-border: #3c4043;
-    --sidebar-accent: #26282b;
-    --sidebar-accent-foreground: #b7c3ff;
+    --gold-soft: #2a2108;
+    --gold-foreground: #071936;
+
+    --background: #06122a;
+    --foreground: #e6ebf5;
+    --card: #0c1c3c;
+    --card-foreground: #e6ebf5;
+    --popover: #0c1c3c;
+    --popover-foreground: #e6ebf5;
+    /* Navy buttons would vanish on a navy page - gold carries primary actions in dark mode. */
+    --primary: var(--gold);
+    --primary-foreground: #071936;
+    --secondary: #15284d;
+    --secondary-foreground: #dbe4f5;
+    --muted: #12244a;
+    --muted-foreground: #9aa8c4;
+    --accent: #15284d;
+    --accent-foreground: #ffffff;
+    --destructive: #f97066;
+    --destructive-foreground: #071936;
+    --border: #1d335f;
+    --input: #2a4475;
+    --ring: var(--gold);
+
+    --success: #4ade80;
+    --success-soft: #0d2a1c;
+    --warning: #fbbf24;
+    --warning-soft: #2a2108;
+
+    --sidebar: var(--navy-deep);
+    --sidebar-border: #13284f;
+    --sidebar-accent: #102550;
   }
 }
 
 @theme inline {
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-navy-secondary: var(--navy-secondary);
+  --color-gold: var(--gold);
+  --color-gold-hover: var(--gold-hover);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-foreground: var(--gold-foreground);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -79,17 +127,26 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* Academic serif for page titles and other major headings only. */
+  --font-serif: var(--font-playfair), Georgia, "Times New Roman", serif;
 }
 
 body {
@@ -97,6 +154,7 @@ body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
 }
 
 * {

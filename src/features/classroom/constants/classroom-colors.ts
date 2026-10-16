@@ -1,14 +1,16 @@
 // Deterministic per-classroom accent, so a class always shows the same banner color
 // without storing one - hashed from the classroom id. See docs/ui-architecture.md §5.
+// Deep, restrained tones that sit alongside the EITHM navy/gold identity - all
+// dark enough for the white banner title to stay readable.
 const ACCENTS = [
-  { key: "indigo", bannerClassName: "bg-indigo-600" },
-  { key: "teal", bannerClassName: "bg-teal-600" },
-  { key: "amber", bannerClassName: "bg-amber-600" },
-  { key: "rose", bannerClassName: "bg-rose-600" },
-  { key: "violet", bannerClassName: "bg-violet-600" },
-  { key: "emerald", bannerClassName: "bg-emerald-600" },
-  { key: "sky", bannerClassName: "bg-sky-600" },
-  { key: "orange", bannerClassName: "bg-orange-600" },
+  { key: "navy", bannerClassName: "bg-navy" },
+  { key: "teal", bannerClassName: "bg-teal-800" },
+  { key: "burgundy", bannerClassName: "bg-rose-900" },
+  { key: "navy-secondary", bannerClassName: "bg-navy-secondary" },
+  { key: "forest", bannerClassName: "bg-emerald-900" },
+  { key: "slate", bannerClassName: "bg-slate-700" },
+  { key: "plum", bannerClassName: "bg-purple-900" },
+  { key: "bronze", bannerClassName: "bg-amber-900" },
 ] as const;
 
 export function getClassroomAccent(classroomId: string) {

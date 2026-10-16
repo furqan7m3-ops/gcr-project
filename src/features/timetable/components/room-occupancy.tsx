@@ -104,7 +104,7 @@ export function RoomOccupancy({ slot, room, rooms, onSelect }: RoomOccupancyProp
                       occupant
                         ? "cursor-not-allowed border-border bg-muted text-muted-foreground line-through"
                         : selected
-                          ? "border-primary bg-primary text-primary-foreground"
+                          ? "border-gold bg-gold font-semibold text-white"
                           : "border-emerald-500/50 bg-card text-foreground hover:bg-emerald-500/10",
                     )}
                   >

@@ -68,7 +68,7 @@ export function CalendarFilterBar({ classrooms, classroomId, eventTypes }: Calen
                 "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 active
-                  ? "border-primary bg-primary/10 text-primary"
+                  ? "border-gold bg-gold-soft text-gold-foreground dark:text-gold"
                   : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >

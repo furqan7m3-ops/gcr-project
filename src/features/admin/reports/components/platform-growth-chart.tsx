@@ -74,7 +74,7 @@ export function PlatformGrowthChart({ growth }: { growth: GrowthPoint[] }) {
             <span className="text-muted-foreground">User signups</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-secondary-foreground/70" aria-hidden />
+            <span className="h-2 w-2 rounded-full bg-gold" aria-hidden />
             <span className="text-muted-foreground">Classrooms created</span>
           </span>
         </div>
@@ -100,8 +100,9 @@ export function PlatformGrowthChart({ growth }: { growth: GrowthPoint[] }) {
             <path
               d={classroomPath}
               fill="none"
-              className="stroke-secondary-foreground/70"
+              className="stroke-gold"
               strokeWidth={2}
+              strokeDasharray="5 3"
             />
             {userPoints.map((point, index) => (
               <circle
@@ -123,7 +124,7 @@ export function PlatformGrowthChart({ growth }: { growth: GrowthPoint[] }) {
                 cx={point.x}
                 cy={point.y}
                 r={3}
-                className="fill-secondary-foreground/70"
+                className="fill-gold"
               >
                 <title>
                   {weekFormatter.format(growth[index].weekStart)}: {point.value} classroom
