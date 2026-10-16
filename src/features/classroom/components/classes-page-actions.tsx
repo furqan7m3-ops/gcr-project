@@ -15,13 +15,19 @@ export function ClassesPageActions({ canCreate }: { canCreate: boolean }) {
   const inviteCode = searchParams.get("code") ?? undefined;
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  // Held in state because the URL is cleaned up (router.replace below) before
+  // the dialog mounts - reading it from searchParams would leave the field empty.
+  const [prefilledCode, setPrefilledCode] = useState<string>();
 
   // A shared invite link (see InvitationDialog) lands here as /classes?code=...
   // - pop the Join dialog pre-filled instead of silently auto-joining, since
   // joining is a real mutation that should still take an explicit click.
   useEffect(() => {
     if (inviteCode) {
-      startTransition(() => setJoinOpen(true));
+      startTransition(() => {
+        setPrefilledCode(inviteCode);
+        setJoinOpen(true);
+      });
       router.replace("/classes");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -29,7 +35,13 @@ export function ClassesPageActions({ canCreate }: { canCreate: boolean }) {
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" onClick={() => setJoinOpen(true)}>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setPrefilledCode(undefined);
+          setJoinOpen(true);
+        }}
+      >
         <UsersRound /> Join class
       </Button>
       {canCreate ? (
@@ -41,7 +53,7 @@ export function ClassesPageActions({ canCreate }: { canCreate: boolean }) {
       {canCreate ? (
         <ClassroomFormDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />
       ) : null}
-      <JoinClassroomDialog open={joinOpen} onOpenChange={setJoinOpen} defaultCode={inviteCode} />
+      <JoinClassroomDialog open={joinOpen} onOpenChange={setJoinOpen} defaultCode={prefilledCode} />
     </div>
   );
 }
